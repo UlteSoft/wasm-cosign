@@ -82,6 +82,7 @@ func (o *AttestOptions) AddFlags(cmd *cobra.Command) {
 		"do not upload the generated attestation, but send the attestation output to STDOUT")
 	cmd.Flags().BoolVarP(&o.Replace, "replace", "", false,
 		"")
+	_ = cmd.Flags().MarkDeprecated("replace", "not needed when OCI referrers become the default behavior")
 
 	cmd.Flags().BoolVarP(&o.SkipConfirmation, "yes", "y", false,
 		"skip confirmation prompts for non-destructive operations")
@@ -106,6 +107,7 @@ func (o *AttestOptions) AddFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&o.TSAServerName, "timestamp-server-name", "",
 		"SAN name to use as the 'ServerName' tls.Config field to verify the mTLS connection to the TSA Server")
+	_ = cmd.RegisterFlagCompletionFunc("timestamp-server-name", cobra.NoFileCompletions)
 
 	cmd.Flags().StringVar(&o.TSAServerURL, "timestamp-server-url", "",
 		"url to the Timestamp RFC3161 server, default none. Must be the path to the API to request timestamp responses, e.g. https://freetsa.org/tsr")
@@ -128,10 +130,11 @@ func (o *AttestOptions) AddFlags(cmd *cobra.Command) {
 	_ = cmd.Flags().MarkDeprecated("new-bundle-format", "this will be the only supported format in future versions")
 
 	cmd.Flags().BoolVar(&o.UseSigningConfig, "use-signing-config", true,
-		"whether to use a TUF-provided signing config for the service URLs. Must set --new-bundle-format, which will store verification material in the new format")
+		"whether to use a TUF-provided signing config for the service URLs")
+	_ = cmd.Flags().MarkDeprecated("use-signing-config", "an offline signing flag will be added in the future; TUF will continue to provide a signing config by default if one is not provided manually")
 
 	cmd.Flags().StringVar(&o.SigningConfigPath, "signing-config", "",
-		"path to a signing config file. Must provide --new-bundle-format, which will store verification material in the new format")
+		"path to a signing config file")
 
 	cmd.MarkFlagsMutuallyExclusive("use-signing-config", "signing-config")
 

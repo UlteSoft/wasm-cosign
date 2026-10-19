@@ -40,7 +40,7 @@ func SignBlob() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sign-blob",
-		Short: "Sign the supplied blob, outputting the base64-encoded signature to stdout.",
+		Short: "Sign the supplied blob, outputting the base64-encoded signature to stdout",
 		Example: `  cosign sign-blob --key <key path>|<kms uri> <blob>
 
   # sign a blob with a local key pair file
@@ -63,7 +63,7 @@ func SignBlob() *cobra.Command {
 
   # sign a WebAssembly module, appending the Sigstore bundle in a new wasm-cosign custom section
   cosign sign-blob --wasm --wasm-output signed.wasm --key cosign.key module.wasm`,
-		Args:             cobra.MinimumNArgs(1),
+		Args:             cobra.ExactArgs(1),
 		PersistentPreRun: options.BindViper,
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			if options.NOf(o.Key, o.SecurityKey.Use) > 1 {
@@ -100,6 +100,13 @@ func SignBlob() *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := signcommon.ValidateSigningOptions(cmd.Context(), o.UseSigningConfig, o.SigningConfigPath,
+				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL,
+				o.TlogUpload, o.NewBundleFormat, o.BundlePath,
+				o.Output, "", o.OutputCertificate, "", o.OutputSignature, o.RFC3161TimestampPath); err != nil {
+				return err
+			}
+
 			signingAlgorithm := ""
 			if cmd.Flags().Changed("signing-algorithm") {
 				signingAlgorithm = o.SigningAlgorithm
@@ -117,13 +124,13 @@ func SignBlob() *cobra.Command {
 				FulcioURL:                      o.Fulcio.URL,
 				IDToken:                        o.Fulcio.IdentityToken,
 				FulcioAuthFlow:                 o.Fulcio.AuthFlow,
-				InsecureSkipFulcioVerify:       o.Fulcio.InsecureSkipFulcioVerify,
 				RekorURL:                       o.Rekor.URL,
 				OIDCIssuer:                     o.OIDC.Issuer,
 				OIDCClientID:                   o.OIDC.ClientID,
 				OIDCClientSecret:               oidcClientSecret,
 				OIDCRedirectURL:                o.OIDC.RedirectURL,
 				OIDCDisableProviders:           o.OIDC.DisableAmbientProviders,
+				OIDCProvider:                   o.OIDC.Provider,
 				BundlePath:                     o.BundlePath,
 				NewBundleFormat:                o.NewBundleFormat,
 				SkipConfirmation:               o.SkipConfirmation,
@@ -136,30 +143,25 @@ func SignBlob() *cobra.Command {
 				IssueCertificateForExistingKey: o.IssueCertificate,
 				SigningAlgorithm:               signingAlgorithm,
 			}
-			if err := signcommon.LoadTrustedMaterialAndSigningConfig(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath,
-				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL, o.TrustedRootPath, o.TlogUpload,
-				o.NewBundleFormat, o.BundlePath, o.Key, o.IssueCertificate,
-				o.Output, "", o.OutputCertificate, "", o.OutputSignature, o.RFC3161TimestampPath); err != nil {
+			if err := signcommon.LoadSigningConfigAndTrustedMaterial(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath, o.TrustedRootPath); err != nil {
 				return err
 			}
 
-			for _, blob := range args {
-				// TODO: remove when the output flag has been deprecated
-				if o.Output != "" {
-					fmt.Fprintln(os.Stderr, "WARNING: the '--output' flag is deprecated and will be removed in the future. Use '--output-signature'")
-					o.OutputSignature = o.Output
-				}
+			// TODO: remove when the output flag has been deprecated
+			if o.Output != "" {
+				fmt.Fprintln(os.Stderr, "WARNING: the '--output' flag is deprecated and will be removed in the future. Use '--output-signature'")
+				o.OutputSignature = o.Output
+			}
 
-				if o.Wasm {
-					if err := signWasmBlob(cmd.Context(), ko, blob, o.Cert, o.CertChain, o.Base64Output, o.OutputSignature, o.OutputCertificate, o.TlogUpload, o.WasmOutput); err != nil {
-						return fmt.Errorf("signing wasm %s: %w", blob, err)
-					}
-					continue
+			blob := args[0]
+			if o.Wasm {
+				if err := signWasmBlob(cmd.Context(), ko, blob, o.Cert, o.CertChain, o.Base64Output, o.OutputSignature, o.OutputCertificate, o.TlogUpload, o.WasmOutput); err != nil {
+					return fmt.Errorf("signing wasm %s: %w", blob, err)
 				}
-
-				if _, err := sign.SignBlobCmd(cmd.Context(), ro, ko, blob, o.Cert, o.CertChain, o.Base64Output, o.OutputSignature, o.OutputCertificate, o.TlogUpload); err != nil {
-					return fmt.Errorf("signing %s: %w", blob, err)
-				}
+				return nil
+			}
+			if _, err := sign.SignBlobCmd(cmd.Context(), ro, ko, blob, o.Cert, o.CertChain, o.Base64Output, o.OutputSignature, o.OutputCertificate, o.TlogUpload); err != nil {
+				return fmt.Errorf("signing %s: %w", blob, err)
 			}
 			return nil
 		},

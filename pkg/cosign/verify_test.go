@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
+	"github.com/digitorus/timestamp"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag/conv"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -53,9 +54,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/secure-systems-lab/go-securesystemslib/dsse"
-	"github.com/sigstore/cosign/v3/internal/pkg/cosign/payload"
 	"github.com/sigstore/cosign/v3/internal/pkg/cosign/rekor/mock"
-	"github.com/sigstore/cosign/v3/internal/pkg/cosign/tsa"
 	tsaMock "github.com/sigstore/cosign/v3/internal/pkg/cosign/tsa/mock"
 	"github.com/sigstore/cosign/v3/internal/test"
 	"github.com/sigstore/cosign/v3/pkg/cosign/bundle"
@@ -763,23 +762,32 @@ func TestVerifyImageSignatureWithSigVerifierAndTSA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error generating verifier: %v", err)
 	}
-	payloadSigner := payload.NewSigner(sv)
-	testSigner := tsa.NewSigner(payloadSigner, client)
-
 	certChainPEM, err := cryptoutils.MarshalCertificatesToPEM(client.CertChain)
 	if err != nil {
 		t.Fatalf("unexpected error marshalling cert chain: %v", err)
 	}
 
-	leaves, intermediates, roots, err := tsa.SplitPEMCertificateChain(certChainPEM)
+	leaves, intermediates, roots, err := splitPEMCertificateChain(certChainPEM)
 	if err != nil {
 		t.Fatal("error splitting response into certificate chain")
 	}
 
 	payload := []byte{1, 2, 3, 4}
-	sig, _, err := testSigner.Sign(context.Background(), bytes.NewReader(payload))
+	sigBytes, err := sv.SignMessage(bytes.NewReader(payload))
 	if err != nil {
-		t.Fatalf("error signing the payload with the tsa client server: %v", err)
+		t.Fatalf("error signing the payload: %v", err)
+	}
+
+	client.Message = sigBytes
+	timestampResponse, err := client.GetTimestampResponse(nil)
+	if err != nil {
+		t.Fatalf("error getting timestamp response: %v", err)
+	}
+
+	b64sig := base64.StdEncoding.EncodeToString(sigBytes)
+	sig, err := static.NewSignature(payload, b64sig, static.WithRFC3161Timestamp(bundle.TimestampToRFC3161Timestamp(timestampResponse)))
+	if err != nil {
+		t.Fatalf("error creating oci signature: %v", err)
 	}
 	if bundleVerified, err := VerifyImageSignature(context.TODO(), sig, v1.Hash{}, &CheckOpts{
 		SigVerifier:                 sv,
@@ -809,23 +817,32 @@ func TestVerifyImageSignatureWithSigVerifierAndRekorTSA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error generating verifier: %v", err)
 	}
-	payloadSigner := payload.NewSigner(sv)
-	tsaSigner := tsa.NewSigner(payloadSigner, client)
-
 	certChainPEM, err := cryptoutils.MarshalCertificatesToPEM(client.CertChain)
 	if err != nil {
 		t.Fatalf("unexpected error marshalling cert chain: %v", err)
 	}
 
-	leaves, intermediates, roots, err := tsa.SplitPEMCertificateChain(certChainPEM)
+	leaves, intermediates, roots, err := splitPEMCertificateChain(certChainPEM)
 	if err != nil {
 		t.Fatal("error splitting response into certificate chain")
 	}
 
 	payload := []byte{1, 2, 3, 4}
-	sig, _, err := tsaSigner.Sign(context.Background(), bytes.NewReader(payload))
+	sigBytes, err := sv.SignMessage(bytes.NewReader(payload))
 	if err != nil {
-		t.Fatalf("error signing the payload with the rekor and tsa clients: %v", err)
+		t.Fatalf("error signing the payload: %v", err)
+	}
+
+	client.Message = sigBytes
+	timestampResponse, err := client.GetTimestampResponse(nil)
+	if err != nil {
+		t.Fatalf("error getting timestamp response: %v", err)
+	}
+
+	b64sig := base64.StdEncoding.EncodeToString(sigBytes)
+	sig, err := static.NewSignature(payload, b64sig, static.WithRFC3161Timestamp(bundle.TimestampToRFC3161Timestamp(timestampResponse)))
+	if err != nil {
+		t.Fatalf("error creating oci signature: %v", err)
 	}
 	if _, err := VerifyImageSignature(context.TODO(), sig, v1.Hash{}, &CheckOpts{
 		SigVerifier:                 sv,
@@ -1598,19 +1615,6 @@ func TestValidateAndUnpackCertWithSCT(t *testing.T) {
 	rootPool := x509.NewCertPool()
 	rootPool.AddCert(chain[1])
 
-	// Grab the CTLog public keys
-	pubKeys, err := GetCTLogPubs(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to get CTLog public keys from TUF: %v", err)
-	}
-
-	co := &CheckOpts{
-		RootCerts: rootPool,
-		// explicitly set to false
-		IgnoreSCT:    false,
-		CTLogPubKeys: pubKeys,
-	}
-
 	// write SCT verification key to disk
 	tmpPrivFile, err := os.CreateTemp(t.TempDir(), "cosign_verify_sct_*.key")
 	if err != nil {
@@ -1622,10 +1626,17 @@ func TestValidateAndUnpackCertWithSCT(t *testing.T) {
 	}
 	t.Setenv("SIGSTORE_CT_LOG_PUBLIC_KEY_FILE", tmpPrivFile.Name())
 
-	// Grab the CTLog public keys again so we get them from env.
-	co.CTLogPubKeys, err = GetCTLogPubs(context.Background())
+	// Grab the CTLog public keys from env
+	pubKeys, err := GetCTLogPubs(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to get CTLog public keys from TUF: %v", err)
+		t.Fatalf("Failed to get CTLog public keys: %v", err)
+	}
+
+	co := &CheckOpts{
+		RootCerts: rootPool,
+		// explicitly set to false
+		IgnoreSCT:    false,
+		CTLogPubKeys: pubKeys,
 	}
 	_, err = ValidateAndUnpackCert(chain[0], co)
 	if err != nil {
@@ -1745,7 +1756,7 @@ func TestVerifyRFC3161Timestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tsBytes, err := tsa.GetTimestampedSignature(signature, client)
+	tsBytes, err := getTimestampedSignature(signature, client)
 	if err != nil {
 		t.Fatalf("unexpected error creating timestamp: %v", err)
 	}
@@ -1756,7 +1767,7 @@ func TestVerifyRFC3161Timestamp(t *testing.T) {
 		t.Fatalf("unexpected error marshalling cert chain: %v", err)
 	}
 
-	leaves, intermediates, roots, err := tsa.SplitPEMCertificateChain(certChainPEM)
+	leaves, intermediates, roots, err := splitPEMCertificateChain(certChainPEM)
 	if err != nil {
 		t.Fatal("error splitting response into certificate chain")
 	}
@@ -1780,7 +1791,7 @@ func TestVerifyRFC3161Timestamp(t *testing.T) {
 	}
 
 	// success, signing over payload
-	tsBytes, err = tsa.GetTimestampedSignature(payload, client)
+	tsBytes, err = getTimestampedSignature(payload, client)
 	if err != nil {
 		t.Fatalf("unexpected error creating timestamp: %v", err)
 	}
@@ -1813,7 +1824,7 @@ func TestVerifyRFC3161Timestamp(t *testing.T) {
 	}
 
 	// failure with mismatched signature
-	tsBytes, err = tsa.GetTimestampedSignature(signature, client)
+	tsBytes, err = getTimestampedSignature(signature, client)
 	if err != nil {
 		t.Fatalf("unexpected error creating timestamp: %v", err)
 	}
@@ -1840,6 +1851,18 @@ func TestVerifyRFC3161Timestamp(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "no TSA root certificate(s) provided to verify timestamp") {
 		t.Fatalf("expected error verifying without a root certificate, got: %v", err)
+	}
+
+	// failure with empty TrustedRoot
+	emptyTrustedRoot, err := root.NewTrustedRoot(root.TrustedRootMediaType01, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error creating empty trusted root: %v", err)
+	}
+	_, err = VerifyRFC3161Timestamp(ociSig, &CheckOpts{
+		TrustedMaterial: emptyTrustedRoot,
+	})
+	if err == nil || !strings.Contains(err.Error(), "expected at least one verified timestamp") {
+		t.Fatalf("expected error verifying with empty trusted root, got: %v", err)
 	}
 }
 
@@ -1941,7 +1964,7 @@ func TestVerifyImageSignatureExpiredCACertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tsBytes, err := tsa.GetTimestampedSignature(payload, client)
+	tsBytes, err := getTimestampedSignature(payload, client)
 	if err != nil {
 		t.Fatalf("unexpected error creating timestamp: %v", err)
 	}
@@ -1952,7 +1975,7 @@ func TestVerifyImageSignatureExpiredCACertificate(t *testing.T) {
 		t.Fatalf("unexpected error marshalling cert chain: %v", err)
 	}
 
-	leaves, intermediates, roots, err := tsa.SplitPEMCertificateChain(certChainPEM)
+	leaves, intermediates, roots, err := splitPEMCertificateChain(certChainPEM)
 	if err != nil {
 		t.Fatal("error splitting response into certificate chain")
 	}
@@ -2381,6 +2404,83 @@ func TestHasLocalSigstoreBundles_OCIReferrers(t *testing.T) {
 	assert.True(t, hasBundles, "expected true for OCI referrers with bundle layers")
 }
 
+func TestHasLocalSigstoreBundles_ImageIndex(t *testing.T) {
+	// Create a layout with an image index and OCI referrers pointing to it with bundle layers
+	tmp := t.TempDir()
+
+	// Create base image index
+	idx, err := random.Index(100, 3, 2)
+	require.NoError(t, err)
+	sii := signed.ImageIndex(idx)
+
+	// Write the signed image index with proper annotations
+	if err := layout.WriteSignedImageIndex(tmp, sii); err != nil {
+		t.Fatalf("WriteSignedImageIndex() = %v", err)
+	}
+
+	// Get the layout and root image index
+	p, err := ggcrlayout.FromPath(tmp)
+	require.NoError(t, err)
+
+	ii, err := p.ImageIndex()
+	require.NoError(t, err)
+
+	manifest, err := ii.IndexManifest()
+	require.NoError(t, err)
+
+	// Find the target digest for the imageIndex entry
+	var targetDigest v1.Hash
+	for _, m := range manifest.Manifests {
+		if m.Annotations["kind"] == "dev.cosignproject.cosign/imageIndex" {
+			targetDigest = m.Digest
+			break
+		}
+	}
+	require.NotEmpty(t, targetDigest.String(), "target digest should be found for imageIndex")
+
+	// Create a bundle layer with the sigstore bundle media type
+	bundleContent := []byte(`{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}`)
+	bundleLayer := stream.NewLayer(io.NopCloser(bytes.NewReader(bundleContent)),
+		stream.WithMediaType("application/vnd.dev.sigstore.bundle.v0.3+json"))
+
+	// Build the referrer manifest
+	referrerImg := empty.Image
+	referrerImg, err = gcrMutate.AppendLayers(referrerImg, bundleLayer)
+	require.NoError(t, err)
+
+	// Append image to materialize stream layers before calling Manifest()
+	err = p.AppendImage(referrerImg)
+	require.NoError(t, err)
+
+	// Get the manifest and add Subject field pointing to the image index
+	referrerManifest, err := referrerImg.Manifest()
+	require.NoError(t, err)
+
+	referrerManifest.Subject = &v1.Descriptor{
+		MediaType: "application/vnd.oci.image.index.v1+json",
+		Digest:    targetDigest,
+		Size:      0,
+	}
+
+	// Write the referrer manifest to blobs/sha256
+	blobsDir := tmp + "/blobs/sha256"
+	err = os.MkdirAll(blobsDir, 0755)
+	require.NoError(t, err)
+
+	manifestBytes, err := json.Marshal(referrerManifest)
+	require.NoError(t, err)
+
+	manifestHash := v1.Hash{Algorithm: "sha256", Hex: fmt.Sprintf("%x", sha256.Sum256(manifestBytes))}
+	manifestPath := filepath.Join(blobsDir, manifestHash.Hex)
+	err = os.WriteFile(manifestPath, manifestBytes, 0644)
+	require.NoError(t, err)
+
+	// Test that hasLocalSigstoreBundles detects the referrer
+	hasBundles, err := hasLocalSigstoreBundles(tmp)
+	require.NoError(t, err)
+	assert.True(t, hasBundles, "expected true for OCI referrers with bundle layers")
+}
+
 func TestHasLocalSigstoreBundles_NoBlobsDir(t *testing.T) {
 	// Create a layout without blobs/sha256 directory
 	tmp := t.TempDir()
@@ -2550,4 +2650,249 @@ func TestGetLocalBundles_InvalidPath(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, hash)
 	assert.Nil(t, bundles)
+}
+
+func getTimestampedSignature(sigBytes []byte, tsaClient *tsaMock.TSAClient) ([]byte, error) {
+	requestBytes, err := timestamp.CreateRequest(bytes.NewReader(sigBytes), &timestamp.RequestOptions{
+		Hash:         crypto.SHA256,
+		Certificates: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating timestamp request: %w", err)
+	}
+
+	return tsaClient.GetTimestampResponse(requestBytes)
+}
+
+func TestBundleHash(t *testing.T) {
+	sv, _, err := signature.NewECDSASignerVerifier(elliptic.P256(), rand.Reader, crypto.SHA256)
+	if err != nil {
+		t.Fatalf("creating signer: %v", err)
+	}
+	pemBytes, _ := cryptoutils.MarshalPublicKeyToPEM(sv.Public())
+	b64key := base64.StdEncoding.EncodeToString(pemBytes)
+
+	payload := []byte{1, 2, 3, 4}
+	digest := sha256.Sum256(payload)
+	value := hex.EncodeToString(digest[:])
+	sig, err := sv.SignMessage(bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("signing: %v", err)
+	}
+	b64sig := base64.StdEncoding.EncodeToString(sig)
+	hash := fmt.Sprintf(`{"algorithm":"sha256","value":%q}`, value)
+
+	tests := []struct {
+		name string
+		body string
+	}{{
+		name: "dsse v0.0.1",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"dsse","spec":{"envelopeHash":%s,"payloadHash":%s,"signatures":[{"signature":%q,"verifier":%q}]}}`,
+			hash, hash, b64sig, b64key),
+	}, {
+		name: "hashedrekord v0.0.1",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"hashedrekord","spec":{"data":{"hash":%s},"signature":{"content":%q,"publicKey":{"content":%q}}}}`,
+			hash, b64sig, b64key),
+	}, {
+		name: "intoto v0.0.1",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"intoto","spec":{"content":{"hash":%s,"payloadHash":%s},"publicKey":%q}}`,
+			hash, hash, b64key),
+	}, {
+		name: "intoto v0.0.2",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.2","kind":"intoto","spec":{"content":{"envelope":{"payloadType":"application/vnd.in-toto+json","payload":"","signatures":[{"publicKey":%q,"sig":%q}]},"hash":%s}}}`,
+			b64key, b64sig, hash),
+	}, {
+		name: "rekord v0.0.1",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"rekord","spec":{"data":{"hash":%s},"signature":{"format":"x509","content":%q,"publicKey":{"content":%q}}}}`,
+			hash, b64sig, b64key),
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alg, val, err := bundleHash(base64.StdEncoding.EncodeToString([]byte(tt.body)), "")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if alg != "sha256" || val != value {
+				t.Errorf("got %s:%s, want sha256:%s", alg, val, value)
+			}
+		})
+	}
+}
+
+func TestBundleHashWithMissingHash(t *testing.T) {
+	sv, _, err := signature.NewECDSASignerVerifier(elliptic.P256(), rand.Reader, crypto.SHA256)
+	if err != nil {
+		t.Fatalf("creating signer: %v", err)
+	}
+	pemBytes, _ := cryptoutils.MarshalPublicKeyToPEM(sv.Public())
+	b64key := base64.StdEncoding.EncodeToString(pemBytes)
+	value := strings.Repeat("0", 64)
+	payloadHash := fmt.Sprintf(`{"algorithm":"sha256","value":%q}`, value)
+
+	rekord := func(hash string) string {
+		return fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"rekord","spec":{"data":{"content":"YQ=="%s},"signature":{"format":"x509","content":"YQ==","publicKey":{"content":%q}}}}`,
+			hash, b64key)
+	}
+	intotoV002 := func(hash string) string {
+		return fmt.Sprintf(`{"apiVersion":"0.0.2","kind":"intoto","spec":{"content":{"envelope":{"payloadType":"application/vnd.in-toto+json","payload":"","signatures":[{"publicKey":%q,"sig":"YQ=="}]}%s}}}`,
+			b64key, hash)
+	}
+
+	// Only rekord v0.0.1 and intoto v0.0.2 accept an entry with no hash, and
+	// those reach bundleHash's own check. Rekor rejects every other case
+	// before the switch is reached. A hash object missing only its algorithm
+	// or value fails Rekor's validation for every entry type, so the
+	// hashFields error is covered by TestHashFields instead.
+	tests := []struct {
+		name    string
+		body    string
+		wantErr string
+	}{{
+		name:    "rekord v0.0.1 without data.hash",
+		body:    rekord(""),
+		wantErr: "no hash found in bundle entry",
+	}, {
+		name:    "intoto v0.0.2 without content.hash",
+		body:    intotoV002(""),
+		wantErr: "no hash found in bundle entry",
+	}, {
+		name: "rekord v0.0.1 without data.hash.value",
+		body: rekord(`,"hash":{"algorithm":"sha256"}`),
+	}, {
+		name: "rekord v0.0.1 without data.hash.algorithm",
+		body: rekord(fmt.Sprintf(`,"hash":{"value":%q}`, value)),
+	}, {
+		name: "intoto v0.0.2 without content.hash.value",
+		body: intotoV002(`,"hash":{"algorithm":"sha256"}`),
+	}, {
+		name: "intoto v0.0.2 without content.hash.algorithm",
+		body: intotoV002(fmt.Sprintf(`,"hash":{"value":%q}`, value)),
+	}, {
+		name: "dsse v0.0.1 without envelopeHash",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"dsse","spec":{"payloadHash":%s,"signatures":[{"signature":"YQ==","verifier":%q}]}}`,
+			payloadHash, b64key),
+	}, {
+		name: "hashedrekord v0.0.1 without data.hash",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"hashedrekord","spec":{"data":{},"signature":{"content":"YQ==","publicKey":{"content":%q}}}}`,
+			b64key),
+	}, {
+		name: "intoto v0.0.1 without content.hash",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"intoto","spec":{"content":{"payloadHash":%s},"publicKey":%q}}`,
+			payloadHash, b64key),
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := bundleHash(base64.StdEncoding.EncodeToString([]byte(tt.body)), "")
+			if err == nil {
+				t.Fatal("expected an error, got none")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("wanted %q, got: %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestHashFields(t *testing.T) {
+	algorithm, value := "sha256", strings.Repeat("0", 64)
+	tests := []struct {
+		name      string
+		algorithm *string
+		value     *string
+		wantErr   bool
+	}{
+		{name: "both set", algorithm: &algorithm, value: &value},
+		{name: "missing algorithm", value: &value, wantErr: true},
+		{name: "missing value", algorithm: &algorithm, wantErr: true},
+		{name: "missing both", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alg, val, err := hashFields(tt.algorithm, tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if alg != algorithm || val != value {
+				t.Errorf("got %s:%s, want %s:%s", alg, val, algorithm, value)
+			}
+		})
+	}
+}
+
+func TestVerifyImageSignatureWithBundleBodyMissingHash(t *testing.T) {
+	rootCert, rootKey, _ := test.GenerateRootCa()
+	leafCert, privKey, _ := test.GenerateLeafCert("subject@mail.com", "oidc-issuer", rootCert, rootKey)
+	pemLeaf := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafCert.Raw})
+
+	rootPool := x509.NewCertPool()
+	rootPool.AddCert(rootCert)
+
+	payload := []byte{1, 2, 3, 4}
+	h := sha256.Sum256(payload)
+	sig, _ := privKey.Sign(rand.Reader, h[:], crypto.SHA256)
+	b64sig := base64.StdEncoding.EncodeToString(sig)
+	b64leaf := base64.StdEncoding.EncodeToString(pemLeaf)
+
+	sv, _, err := signature.NewECDSASignerVerifier(elliptic.P256(), rand.Reader, crypto.SHA256)
+	if err != nil {
+		t.Fatalf("creating signer: %v", err)
+	}
+	pemBytes, _ := cryptoutils.MarshalPublicKeyToPEM(sv.Public())
+	rekorPubKeys := NewTrustedTransparencyLogPubKeys()
+	rekorPubKeys.AddTransparencyLogPubKey(pemBytes, tuf.Active)
+
+	// The bundle is read from the registry, so its body is chosen by whoever
+	// published the signature. These bodies carry the real signature and
+	// certificate so that they get past the bundle's signature and public key
+	// comparisons, but omit the entry hash.
+	tests := []struct {
+		name string
+		body string
+	}{{
+		name: "rekord v0.0.1",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.1","kind":"rekord","spec":{"data":{"content":%q},"signature":{"format":"x509","content":%q,"publicKey":{"content":%q}}}}`,
+			base64.StdEncoding.EncodeToString(payload), b64sig, b64leaf),
+	}, {
+		name: "intoto v0.0.2",
+		body: fmt.Sprintf(`{"apiVersion":"0.0.2","kind":"intoto","spec":{"content":{"envelope":{"payloadType":"application/vnd.in-toto+json","payload":"","signatures":[{"publicKey":%q,"sig":%q}]}}}}`,
+			b64leaf, b64sig),
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rekorBundle := &bundle.RekorBundle{
+				SignedEntryTimestamp: []byte("not reached"),
+				Payload: bundle.RekorPayload{
+					Body:           base64.StdEncoding.EncodeToString([]byte(tt.body)),
+					IntegratedTime: 1,
+					LogIndex:       1,
+					LogID:          "deadbeef",
+				},
+			}
+			opts := []static.Option{static.WithCertChain(pemLeaf, []byte{}), static.WithBundle(rekorBundle)}
+			ociSig, _ := static.NewSignature(payload, b64sig, opts...)
+
+			_, err := VerifyImageSignature(context.TODO(), ociSig, v1.Hash{},
+				&CheckOpts{
+					RootCerts:    rootPool,
+					IgnoreSCT:    true,
+					Identities:   []Identity{{Subject: "subject@mail.com", Issuer: "oidc-issuer"}},
+					RekorPubKeys: &rekorPubKeys})
+			if err == nil {
+				t.Fatal("expected an error, got none")
+			}
+			if !strings.Contains(err.Error(), "no hash found in bundle entry") {
+				t.Errorf("wanted 'no hash found in bundle entry', got: %v", err)
+			}
+		})
+	}
 }

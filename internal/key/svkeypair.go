@@ -134,17 +134,17 @@ func (k *SignerVerifierKeypair) GetPublicKeyPem() (string, error) {
 
 // SignData signs the given data with the SignerVerifier.
 func (k *SignerVerifierKeypair) SignData(ctx context.Context, data []byte) ([]byte, []byte, error) {
+	var digest []byte
+	sOpts := []signature.SignOption{signatureoptions.WithContext(ctx)}
+
 	hashType := k.sigAlg.GetHashType()
-	digest := data
-	if hashType != crypto.Hash(0) {
+	if hashType != 0 {
 		h := hashType.New()
 		h.Write(data)
 		digest = h.Sum(nil)
+		sOpts = append(sOpts, signatureoptions.WithDigest(digest), signatureoptions.WithCryptoSignerOpts(hashType))
 	}
-	sOpts := []signature.SignOption{signatureoptions.WithContext(ctx)}
-	if hashType != crypto.Hash(0) {
-		sOpts = append(sOpts, signatureoptions.WithDigest(digest))
-	}
+
 	sig, err := k.sv.SignMessage(bytes.NewReader(data), sOpts...)
 	if err != nil {
 		return nil, nil, err

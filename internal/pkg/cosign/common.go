@@ -43,16 +43,14 @@ type HashReader struct {
 	r  io.Reader
 	h  hash.Hash
 	ch crypto.Hash
-	b  *bytesHash
 }
 
 func NewHashReader(r io.Reader, ch crypto.Hash) HashReader {
-	if ch == crypto.Hash(0) {
-		b := &bytesHash{}
+	if ch == 0 {
 		return HashReader{
-			r:  io.TeeReader(r, b),
+			r:  r,
+			h:  nil,
 			ch: ch,
-			b:  b,
 		}
 	}
 	h := ch.New()
@@ -68,22 +66,15 @@ func (h *HashReader) Read(p []byte) (n int, err error) { return h.r.Read(p) }
 
 // Sum implements hash.Hash.
 func (h *HashReader) Sum(p []byte) []byte {
-	if h.ch == crypto.Hash(0) {
-		if h.b == nil {
-			return append(p, []byte{}...)
-		}
-		return h.b.Sum(p)
+	if h.h == nil {
+		return nil
 	}
 	return h.h.Sum(p)
 }
 
 // Reset implements hash.Hash.
 func (h *HashReader) Reset() {
-	if h.ch == crypto.Hash(0) {
-		if h.b == nil {
-			return
-		}
-		h.b.Reset()
+	if h.h == nil {
 		return
 	}
 	h.h.Reset()
@@ -91,22 +82,16 @@ func (h *HashReader) Reset() {
 
 // Size implements hash.Hash.
 func (h *HashReader) Size() int {
-	if h.ch == crypto.Hash(0) {
-		if h.b == nil {
-			return 0
-		}
-		return h.b.Size()
+	if h.h == nil {
+		return 0
 	}
 	return h.h.Size()
 }
 
 // BlockSize implements hash.Hash.
 func (h *HashReader) BlockSize() int {
-	if h.ch == crypto.Hash(0) {
-		if h.b == nil {
-			return 1
-		}
-		return h.b.BlockSize()
+	if h.h == nil {
+		return 0
 	}
 	return h.h.BlockSize()
 }
@@ -116,28 +101,3 @@ func (h *HashReader) Write(p []byte) (int, error) { return 0, errors.New("not im
 
 // HashFunc implements cosign.NamedHash
 func (h *HashReader) HashFunc() crypto.Hash { return h.ch }
-
-type bytesHash struct {
-	buf []byte
-}
-
-func (b *bytesHash) Write(p []byte) (int, error) {
-	b.buf = append(b.buf, p...)
-	return len(p), nil
-}
-
-func (b *bytesHash) Sum(p []byte) []byte {
-	return append(p, b.buf...)
-}
-
-func (b *bytesHash) Reset() {
-	b.buf = nil
-}
-
-func (b *bytesHash) Size() int {
-	return len(b.buf)
-}
-
-func (b *bytesHash) BlockSize() int {
-	return 1
-}

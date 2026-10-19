@@ -26,8 +26,9 @@ import (
 
 func Manifest() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "manifest",
-		Short: "Provides utilities for discovering images in and performing operations on Kubernetes manifests",
+		Use:        "manifest",
+		Short:      "Provides utilities for discovering images in and performing operations on Kubernetes manifests",
+		Deprecated: "manifest will be removed in v4.0.0 (see https://github.com/sigstore/cosign/issues/4696). Instead, please use `cosign verify` for each image in your Kubernetes manifest",
 	}
 
 	cmd.AddCommand(
@@ -99,6 +100,7 @@ against the transparency log.`,
 					Attachment:                   o.Attachment,
 					Annotations:                  annotations,
 					LocalImage:                   o.LocalImage,
+					CommonVerifyOptions:          o.CommonVerifyOptions,
 					Offline:                      o.CommonVerifyOptions.Offline,
 					TSACertChainPath:             o.CommonVerifyOptions.TSACertChainPath,
 					IgnoreTlog:                   o.CommonVerifyOptions.IgnoreTlog,

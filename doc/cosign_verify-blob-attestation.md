@@ -43,6 +43,7 @@ cosign verify-blob-attestation [flags]
 ### Options
 
 ```
+      --allow-certificate-chain                         allow X.509 certificate chains in bundle verification material for v0.3+ bundles
       --bundle string                                   path to bundle FILE
       --certificate-github-workflow-name string         contains the workflow claim from the GitHub OIDC Identity token that contains the name of the executed workflow.
       --certificate-github-workflow-ref string          contains the ref claim from the GitHub OIDC Identity token that contains the git ref that the workflow run was based upon.
@@ -56,7 +57,6 @@ cosign verify-blob-attestation [flags]
       --check-claims                                    if true, verifies the digest exists in the in-toto subject (using either the provided digest and digest algorithm or the provided blob's sha256 digest). If false, only the DSSE envelope is verified. (default true)
       --digest string                                   Digest to use for verifying in-toto subject (instead of providing a blob)
       --digestAlg string                                Digest algorithm to use for verifying in-toto subject (instead of providing a blob)
-      --experimental-oci11                              set to true to enable experimental OCI 1.1 behaviour (unrelated to bundle format)
   -h, --help                                            help for verify-blob-attestation
       --insecure-ignore-sct                             when set, verification will not check that a certificate contains an embedded SCT, a proof of inclusion in a certificate transparency log
       --insecure-ignore-tlog                            ignore transparency log verification, to be used when an artifact signature has not been uploaded to the transparency log. Artifacts cannot be publicly verified when not included in a log
@@ -64,7 +64,7 @@ cosign verify-blob-attestation [flags]
       --max-workers int                                 the amount of maximum workers for parallel executions (default 10)
       --sk                                              whether to use a hardware security key
       --slot string                                     security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|key-management)
-      --trusted-root string                             Path to a Sigstore TrustedRoot JSON file. Requires --new-bundle-format to be set.
+      --trusted-root string                             Path to a Sigstore TrustedRoot JSON file
       --type string                                     specify a predicate type (slsaprovenance|slsaprovenance02|slsaprovenance1|link|spdx|spdxjson|cyclonedx|vuln|openvex|custom) or an URI (default "custom")
       --use-signed-timestamps                           verify rfc3161 timestamps
 ```
@@ -79,5 +79,5 @@ cosign verify-blob-attestation [flags]
 
 ### SEE ALSO
 
-* [cosign](cosign.md)	 - A tool for Container Signing, Verification and Storage in an OCI registry.
+* [cosign](cosign.md)	 - A tool for Container Signing, Verification and Storage in an OCI registry
 

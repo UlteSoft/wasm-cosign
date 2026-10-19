@@ -75,7 +75,6 @@ func GetHTTPTransport(cacertFilename, certFilename, keyFilename, serverName stri
 		DialContext: (&net.Dialer{
 			Timeout:   timeout,
 			KeepAlive: 30 * time.Second,
-			DualStack: true,
 		}).DialContext,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -163,15 +162,4 @@ func (t *TimestampAuthorityClientImpl) GetTimestampResponse(tsq []byte) ([]byte,
 
 func NewTSAClient(url string) *TimestampAuthorityClientImpl {
 	return &TimestampAuthorityClientImpl{URL: url, Timeout: defaultTimeout}
-}
-
-func NewTSAClientMTLS(url, cacert, cert, key, serverName string) *TimestampAuthorityClientImpl {
-	return &TimestampAuthorityClientImpl{
-		URL:        url,
-		CACert:     cacert,
-		Cert:       cert,
-		Key:        key,
-		ServerName: serverName,
-		Timeout:    defaultTimeout,
-	}
 }

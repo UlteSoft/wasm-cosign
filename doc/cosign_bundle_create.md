@@ -10,6 +10,16 @@ Create a Sigstore protobuf bundle by supplying signed material
 cosign bundle create [flags]
 ```
 
+### Examples
+
+```
+  # create a bundle from a signature and certificate
+  cosign bundle create --artifact <path> --signature <sig> --certificate <cert> --out bundle.sigstore.json
+
+  # create a bundle from an attestation
+  cosign bundle create --artifact <path> --attestation <att> --out bundle.sigstore.json
+```
+
 ### Options
 
 ```
@@ -21,6 +31,7 @@ cosign bundle create [flags]
       --ignore-tlog                ignore transparency log verification, to be used when an artifact signature has not been uploaded to the transparency log.
       --key string                 path to the public key file, KMS URI or Kubernetes Secret
       --out string                 path to output bundle
+      --rekor-url string           address of rekor STL server (default "https://rekor.sigstore.dev")
       --rfc3161-timestamp string   path to RFC3161 timestamp FILE
       --signature string           path to base64-encoded signature over attestation in DSSE format
       --sk                         whether to use a hardware security key

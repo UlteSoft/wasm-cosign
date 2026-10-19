@@ -104,13 +104,13 @@ func wasmSign() *cobra.Command {
 				FulcioURL:                      o.Fulcio.URL,
 				IDToken:                        o.Fulcio.IdentityToken,
 				FulcioAuthFlow:                 o.Fulcio.AuthFlow,
-				InsecureSkipFulcioVerify:       o.Fulcio.InsecureSkipFulcioVerify,
 				RekorURL:                       o.Rekor.URL,
 				OIDCIssuer:                     o.OIDC.Issuer,
 				OIDCClientID:                   o.OIDC.ClientID,
 				OIDCClientSecret:               oidcClientSecret,
 				OIDCRedirectURL:                o.OIDC.RedirectURL,
 				OIDCDisableProviders:           o.OIDC.DisableAmbientProviders,
+				OIDCProvider:                   o.OIDC.Provider,
 				BundlePath:                     o.BundlePath,
 				NewBundleFormat:                o.NewBundleFormat,
 				SkipConfirmation:               o.SkipConfirmation,
@@ -123,10 +123,14 @@ func wasmSign() *cobra.Command {
 				IssueCertificateForExistingKey: o.IssueCertificate,
 				SigningAlgorithm:               signingAlgorithm,
 			}
-			if err := signcommon.LoadTrustedMaterialAndSigningConfig(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath,
-				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL, o.TrustedRootPath, o.TlogUpload,
-				o.NewBundleFormat, o.BundlePath, o.Key, o.IssueCertificate,
+			if err := signcommon.ValidateSigningOptions(cmd.Context(), o.UseSigningConfig, o.SigningConfigPath,
+				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL,
+				o.TlogUpload, o.NewBundleFormat, o.BundlePath,
 				o.Output, "", o.OutputCertificate, "", o.OutputSignature, o.RFC3161TimestampPath); err != nil {
+				return err
+			}
+
+			if err := signcommon.LoadSigningConfigAndTrustedMaterial(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath, o.TrustedRootPath); err != nil {
 				return err
 			}
 

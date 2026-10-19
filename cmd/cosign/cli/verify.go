@@ -371,6 +371,7 @@ func newVerifyBlobCmd(o *options.VerifyBlobOptions, hashAlgorithm crypto.Hash) *
 		TrustedRootPath:              o.CommonVerifyOptions.TrustedRootPath,
 		HashAlgorithm:                hashAlgorithm,
 		Wasm:                         o.Wasm,
+		AllowCertificateChain:        o.CommonVerifyOptions.AllowCertificateChain,
 	}
 }
 
@@ -453,6 +454,7 @@ The blob may be specified as a path to a file.`,
 				Digest:                       o.Digest,
 				DigestAlg:                    o.DigestAlg,
 				HashAlgorithm:                hashAlgorithm,
+				AllowCertificateChain:        o.CommonVerifyOptions.AllowCertificateChain,
 			}
 			// We only use the blob if we are checking claims.
 			if o.CheckClaims && len(args) == 0 && (o.Digest == "" || o.DigestAlg == "") {

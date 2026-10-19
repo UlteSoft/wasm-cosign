@@ -59,29 +59,30 @@ func SignBlobCmd(ctx context.Context, ro *options.RootOptions, ko options.KeyOpt
 	ctx, cancel := context.WithTimeout(ctx, ro.Timeout)
 	defer cancel()
 
-	// TODO - this does not take ko.SigningConfig into account
-	if !tlogUpload {
+	var uploadToTlog bool
+	var err error
+
+	if ko.SigningConfig == nil {
+		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko)
+		if err != nil {
+			return nil, fmt.Errorf("creating signing config: %w", err)
+		}
+	}
+	uploadToTlog = signcommon.ShouldUploadToTlog(ctx, ko, nil, tlogUpload)
+
+	if !uploadToTlog {
+		ko.SigningConfig = ko.SigningConfig.WithRekorLogURLs()
 		// To maintain backwards compatibility with older cosign versions,
 		// we do not use ed25519ph for ed25519 keys when the signatures are not
 		// uploaded to the Tlog.
 		ko.DefaultLoadOptions = &[]signature.LoadOption{}
 	}
 
-	var shouldUpload bool
-	var err error
-
-	if ko.SigningConfig == nil {
-		shouldUpload, err = signcommon.ShouldUploadToTlog(ctx, ko, nil, tlogUpload)
-		if err != nil {
-			return nil, fmt.Errorf("upload to tlog: %w", err)
-		}
-		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko, shouldUpload)
-		if err != nil {
-			return nil, fmt.Errorf("creating signing config: %w", err)
-		}
+	if err := signcommon.ConfirmPrivacyStatement(ctx, ko); err != nil {
+		return nil, err
 	}
 
-	keypair, certBytes, idToken, err := signcommon.GetKeypairAndToken(ctx, ko, certPath, certChainPath)
+	keypair, certBytes, chainBytes, idToken, err := signcommon.GetKeypairAndToken(ctx, ko, certPath, certChainPath)
 	if err != nil {
 		return nil, fmt.Errorf("getting keypair and token: %w", err)
 	}
@@ -96,7 +97,7 @@ func SignBlobCmd(ctx context.Context, ro *options.RootOptions, ko options.KeyOpt
 	}
 	defer closePayload()
 
-	if hashFunction != crypto.SHA256 && !ko.NewBundleFormat && (shouldUpload || (!ko.Sk && ko.KeyRef == "")) {
+	if hashFunction != crypto.SHA256 && !ko.NewBundleFormat && (uploadToTlog || (!ko.Sk && ko.KeyRef == "")) {
 		ui.Infof(ctx, "Non SHA256 hash function is not supported for old bundle format. Use --new-bundle-format to use the new bundle format or use different signing key/algorithm.")
 		if !ko.SkipConfirmation {
 			if err := ui.ConfirmContinue(ctx); err != nil {
@@ -125,7 +126,7 @@ func SignBlobCmd(ctx context.Context, ro *options.RootOptions, ko options.KeyOpt
 		TSAClientTransport: tsaClientTransport,
 		VerifierOptions:    cbundle.VerifierOptionsForKeypair(keypair),
 	}
-	bundleBytes, err := cbundle.SignData(ctx, content, keypair, idToken, certBytes, ko.SigningConfig, ko.TrustedMaterial, signOpts)
+	bundleBytes, err := cbundle.SignData(ctx, content, keypair, idToken, certBytes, chainBytes, ko.SigningConfig, ko.TrustedMaterial, signOpts)
 	if err != nil {
 		return nil, fmt.Errorf("signing bundle: %w", err)
 	}
@@ -149,11 +150,7 @@ func SignBlobCmd(ctx context.Context, ro *options.RootOptions, ko options.KeyOpt
 	}
 
 	if ko.BundlePath != "" {
-		pubKeyPem, err := keypair.GetPublicKeyPem()
-		if err != nil {
-			return nil, fmt.Errorf("getting public key pem: %w", err)
-		}
-		contents, err := signcommon.NewLegacyBundleFromProtoBundleComponents(bundleComponents, pubKeyPem)
+		contents, err := signcommon.NewLegacyBundleFromProtoBundleComponents(bundleComponents)
 		if err != nil {
 			return nil, fmt.Errorf("creating legacy bundle: %w", err)
 		}

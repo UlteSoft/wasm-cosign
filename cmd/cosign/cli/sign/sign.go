@@ -198,17 +198,19 @@ func signDigestBundle(ctx context.Context, digest name.Digest, ko options.KeyOpt
 	}
 
 	if ko.SigningConfig == nil {
-		shouldUpload, err := signcommon.ShouldUploadToTlog(ctx, ko, digest, signOpts.TlogUpload)
-		if err != nil {
-			return fmt.Errorf("should upload to tlog: %w", err)
-		}
-		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko, shouldUpload)
+		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko)
 		if err != nil {
 			return fmt.Errorf("creating signing config: %w", err)
 		}
 	}
+	if !signcommon.ShouldUploadToTlog(ctx, ko, digest, signOpts.TlogUpload) {
+		ko.SigningConfig = ko.SigningConfig.WithRekorLogURLs()
+	}
+	if err := signcommon.ConfirmPrivacyStatement(ctx, ko); err != nil {
+		return err
+	}
 
-	bundleBytes, _, _, _, err := signcommon.NewAttestationBundle(ctx, ko, signOpts.Cert, signOpts.CertChain, bundleOpts, ko.SigningConfig, ko.TrustedMaterial)
+	bundleBytes, _, _, err := signcommon.NewAttestationBundle(ctx, ko, signOpts.Cert, signOpts.CertChain, bundleOpts, ko.SigningConfig, ko.TrustedMaterial)
 	if err != nil {
 		return err
 	}
@@ -256,17 +258,19 @@ func signDigest(ctx context.Context, digest name.Digest, payload []byte, ko opti
 	}
 
 	if ko.SigningConfig == nil {
-		shouldUpload, err := signcommon.ShouldUploadToTlog(ctx, ko, digest, signOpts.TlogUpload)
-		if err != nil {
-			return fmt.Errorf("should upload to tlog: %w", err)
-		}
-		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko, shouldUpload)
+		ko.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(ko)
 		if err != nil {
 			return fmt.Errorf("creating signing config: %w", err)
 		}
 	}
+	if !signcommon.ShouldUploadToTlog(ctx, ko, digest, signOpts.TlogUpload) {
+		ko.SigningConfig = ko.SigningConfig.WithRekorLogURLs()
+	}
+	if err := signcommon.ConfirmPrivacyStatement(ctx, ko); err != nil {
+		return err
+	}
 
-	keypair, certBytes, idToken, err := signcommon.GetKeypairAndToken(ctx, ko, signOpts.Cert, signOpts.CertChain)
+	keypair, certBytes, chainBytes, idToken, err := signcommon.GetKeypairAndToken(ctx, ko, signOpts.Cert, signOpts.CertChain)
 	if err != nil {
 		return fmt.Errorf("getting keypair and token: %w", err)
 	}
@@ -305,7 +309,7 @@ func signDigest(ctx context.Context, digest name.Digest, payload []byte, ko opti
 			Data: payload,
 		}
 
-		bundleBytes, err := cbundle.SignData(ctx, content, keypair, idToken, certBytes, ko.SigningConfig, ko.TrustedMaterial, cbundleOpts)
+		bundleBytes, err := cbundle.SignData(ctx, content, keypair, idToken, certBytes, chainBytes, ko.SigningConfig, ko.TrustedMaterial, cbundleOpts)
 		if err != nil {
 			return fmt.Errorf("signing bundle: %w", err)
 		}
@@ -365,7 +369,7 @@ func signDigest(ctx context.Context, digest name.Digest, payload []byte, ko opti
 		if signOpts.Recursive {
 			outputPayload = fmt.Sprintf("%s-%s", outputPayload, strings.Replace(digest.DigestStr(), ":", "-", 1))
 		}
-		if err := os.WriteFile(outputPayload, bytes.Join(payloads, []byte("\n")), 0600); err != nil {
+		if err := os.WriteFile(outputPayload, bytes.Join(payloads, []byte("\n")), 0600); err != nil { // #nosec G703 -- user-supplied output path is intentional
 			return fmt.Errorf("create payload file: %w", err)
 		}
 	}
@@ -468,8 +472,6 @@ func fetchLocalSignedPayload(sig oci.Signature) (*cosign.LocalSignedPayload, err
 	}
 	if sigCert != nil {
 		signedPayload.Cert = base64.StdEncoding.EncodeToString(sigCert.Raw)
-	} else {
-		signedPayload.Cert = ""
 	}
 
 	signedPayload.Bundle, err = sig.Bundle()

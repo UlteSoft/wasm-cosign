@@ -31,7 +31,9 @@ func Bundle() *cobra.Command {
 	}
 
 	cmd.AddCommand(bundleCreate())
+	cmd.AddCommand(bundleCreateFromContainer())
 	cmd.AddCommand(bundleUpgrade())
+	cmd.AddCommand(bundleInspect())
 
 	return cmd
 }
@@ -43,26 +45,59 @@ func bundleCreate() *cobra.Command {
 		Use:   "create",
 		Short: "Create a Sigstore protobuf bundle",
 		Long:  "Create a Sigstore protobuf bundle by supplying signed material",
+		Example: `  # create a bundle from a signature and certificate
+  cosign bundle create --artifact <path> --signature <sig> --certificate <cert> --out bundle.sigstore.json
+
+  # create a bundle from an attestation
+  cosign bundle create --artifact <path> --attestation <att> --out bundle.sigstore.json`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			bundleCreateCmd := &bundle.CreateCmd{
-				Artifact:             o.Artifact,
-				AttestationPath:      o.AttestationPath,
-				BundlePath:           o.BundlePath,
-				CertificatePath:      o.CertificatePath,
-				IgnoreTlog:           o.IgnoreTlog,
-				KeyRef:               o.KeyRef,
-				Out:                  o.Out,
-				RekorURL:             o.RekorURL,
-				RFC3161TimestampPath: o.RFC3161TimestampPath,
-				SignaturePath:        o.SignaturePath,
-				Sk:                   o.Sk,
-				Slot:                 o.Slot,
+				Artifact:                  o.Artifact,
+				AttestationPath:           o.AttestationPath,
+				BundlePath:                o.BundlePath,
+				CertificatePath:           o.CertificatePath,
+				Out:                       o.Out,
+				RFC3161TimestampPath:      o.RFC3161TimestampPath,
+				SignaturePath:             o.SignaturePath,
+				CommonBundleCreateOptions: o.CommonBundleCreateOptions,
 			}
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), ro.Timeout)
 			defer cancel()
 
 			return bundleCreateCmd.Exec(ctx)
+		},
+	}
+
+	o.AddFlags(cmd)
+	return cmd
+}
+
+func bundleCreateFromContainer() *cobra.Command {
+	o := &options.BundleCreateFromContainerOptions{}
+
+	cmd := &cobra.Command{
+		Use:   "create-from-container IMAGE",
+		Short: "Create Sigstore protobuf bundles from legacy container attestations",
+		Long: `Create Sigstore protobuf bundles from attestations stored in the
+legacy tag-based format (.att) for a container image, and attach them to
+the image as OCI 1.1 referrers. Bundles that are already attached are skipped.`,
+		Example: `  # convert keyless attestations
+	cosign bundle create-from-container <IMAGE>
+
+  # convert attestations created with a key
+			cosign bundle create-from-container --key cosign.pub <IMAGE>`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			bundleCreateFromContainerCmd := &bundle.CreateFromContainerCmd{
+				Registry:                  o.Registry,
+				CommonBundleCreateOptions: o.CommonBundleCreateOptions,
+			}
+
+			ctx, cancel := context.WithTimeout(cmd.Context(), ro.Timeout)
+			defer cancel()
+
+			return bundleCreateFromContainerCmd.Exec(ctx, args[0])
 		},
 	}
 
@@ -92,5 +127,22 @@ func bundleUpgrade() *cobra.Command {
 	}
 
 	o.AddFlags(cmd)
+	return cmd
+}
+
+func bundleInspect() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "inspect BUNDLE",
+		Short: "Inspect a Sigstore protobuf bundle",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			bundleInspectCmd := &bundle.InspectCmd{
+				BundlePath: args[0],
+			}
+
+			return bundleInspectCmd.Exec()
+		},
+	}
+
 	return cmd
 }

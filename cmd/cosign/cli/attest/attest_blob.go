@@ -148,13 +148,19 @@ func (c *AttestBlobCommand) Exec(ctx context.Context, artifactPath string) error
 
 	if c.SigningConfig == nil {
 		var err error
-		c.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(c.KeyOpts, c.TlogUpload)
+		c.SigningConfig, err = signcommon.NewSigningConfigFromKeyOpts(c.KeyOpts)
 		if err != nil {
 			return fmt.Errorf("creating signing config: %w", err)
 		}
 	}
+	if !signcommon.ShouldUploadToTlog(ctx, c.KeyOpts, nil, c.TlogUpload) {
+		c.SigningConfig = c.SigningConfig.WithRekorLogURLs()
+	}
+	if err := signcommon.ConfirmPrivacyStatement(ctx, c.KeyOpts); err != nil {
+		return err
+	}
 
-	bundleBytes, _, pubKeyPem, _, err := signcommon.NewAttestationBundle(ctx, c.KeyOpts, c.CertPath, c.CertChainPath, bundleOpts, c.SigningConfig, c.TrustedMaterial)
+	bundleBytes, _, _, err := signcommon.NewAttestationBundle(ctx, c.KeyOpts, c.CertPath, c.CertChainPath, bundleOpts, c.SigningConfig, c.TrustedMaterial)
 	if err != nil {
 		return fmt.Errorf("creating bundle: %w", err)
 	}
@@ -178,7 +184,7 @@ func (c *AttestBlobCommand) Exec(ctx context.Context, artifactPath string) error
 	}
 
 	if c.BundlePath != "" {
-		contents, err := signcommon.NewLegacyBundleFromProtoBundleComponents(bundleComponents, pubKeyPem)
+		contents, err := signcommon.NewLegacyBundleFromProtoBundleComponents(bundleComponents)
 		if err != nil {
 			return fmt.Errorf("creating legacy bundle: %w", err)
 		}

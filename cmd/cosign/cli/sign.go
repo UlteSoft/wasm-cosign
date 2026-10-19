@@ -31,14 +31,14 @@ func Sign() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sign",
-		Short: "Sign the supplied container image.",
+		Short: "Sign the supplied container image",
 		Long: `Sign the supplied container image.
 
 Make sure to sign the image by its digest (@sha256:...) rather than by tag
 (:latest) so that you actually sign what you think you're signing! This prevents
 race conditions or (worse) malicious tampering.
 `,
-		Example: `  cosign sign --key <key path>|<kms uri> [--payload <path>] [-a key=value] [--upload=true|false] [-f] [-r] <image digest uri>
+		Example: `  cosign sign --key <key path>|<kms uri> [-a key=value] [--upload=true|false] [-f] [-r] <image digest uri>
 
   # sign a container image with the Sigstore OIDC flow
   cosign sign <IMAGE DIGEST>
@@ -82,21 +82,28 @@ race conditions or (worse) malicious tampering.
   # sign a container image and skip uploading to the transparency log
   cosign sign --key cosign.key --tlog-upload=false <IMAGE DIGEST>
 
-  # sign a container image by manually setting the container image identity
-  cosign sign --sign-container-identity <NEW IMAGE DIGEST> <IMAGE DIGEST>
-
   # sign a container image and honor the creation timestamp of the signature
   cosign sign --key cosign.key --record-creation-timestamp <IMAGE DIGEST>`,
 
 		Args:             cobra.MinimumNArgs(1),
 		PersistentPreRun: options.BindViper,
-		PreRunE: func(_ *cobra.Command, _ []string) error {
+		PreRunE: func(_ *cobra.Command, args []string) error {
 			if o.NewBundleFormat && !o.Upload && o.BundlePath == "" {
 				return fmt.Errorf("must enable upload to the OCI registry or specify a local --bundle path with --new-bundle-format")
+			}
+			if o.BundlePath != "" && (len(args) > 1 || o.Recursive) {
+				return fmt.Errorf("cannot use --bundle when signing multiple images or with --recursive")
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := signcommon.ValidateSigningOptions(cmd.Context(), o.UseSigningConfig, o.SigningConfigPath,
+				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL,
+				o.TlogUpload, o.NewBundleFormat, o.BundlePath,
+				o.Output, "", o.OutputCertificate, o.OutputPayload, o.OutputSignature, ""); err != nil {
+				return err
+			}
+
 			switch o.Attachment {
 			case "sbom":
 				fmt.Fprintln(os.Stderr, options.SBOMAttachmentDeprecation)
@@ -118,7 +125,6 @@ race conditions or (worse) malicious tampering.
 				FulcioURL:                      o.Fulcio.URL,
 				IDToken:                        o.Fulcio.IdentityToken,
 				FulcioAuthFlow:                 o.Fulcio.AuthFlow,
-				InsecureSkipFulcioVerify:       o.Fulcio.InsecureSkipFulcioVerify,
 				RekorURL:                       o.Rekor.URL,
 				OIDCIssuer:                     o.OIDC.Issuer,
 				OIDCClientID:                   o.OIDC.ClientID,
@@ -126,6 +132,7 @@ race conditions or (worse) malicious tampering.
 				OIDCRedirectURL:                o.OIDC.RedirectURL,
 				OIDCDisableProviders:           o.OIDC.DisableAmbientProviders,
 				OIDCProvider:                   o.OIDC.Provider,
+				BundlePath:                     o.BundlePath,
 				SkipConfirmation:               o.SkipConfirmation,
 				TSAClientCACert:                o.TSAClientCACert,
 				TSAClientCert:                  o.TSAClientCert,
@@ -133,10 +140,9 @@ race conditions or (worse) malicious tampering.
 				TSAServerName:                  o.TSAServerName,
 				TSAServerURL:                   o.TSAServerURL,
 				IssueCertificateForExistingKey: o.IssueCertificate,
+				NewBundleFormat:                o.NewBundleFormat,
 			}
-			if err := signcommon.LoadTrustedMaterialAndSigningConfig(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath,
-				o.Rekor.URL, o.Fulcio.URL, o.OIDC.Issuer, o.TSAServerURL, o.TrustedRootPath, o.TlogUpload,
-				o.NewBundleFormat, "", o.Key, o.IssueCertificate, o.Output, "", o.OutputCertificate, o.OutputPayload, o.OutputSignature, ""); err != nil {
+			if err := signcommon.LoadSigningConfigAndTrustedMaterial(cmd.Context(), &ko, o.UseSigningConfig, o.SigningConfigPath, o.TrustedRootPath); err != nil {
 				return err
 			}
 

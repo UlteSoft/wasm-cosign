@@ -39,9 +39,10 @@ import (
 
 // mockSignerVerifier is a mock implementation of signature.SignerVerifier for testing.
 type mockSignerVerifier struct {
-	pubKey    crypto.PublicKey
-	pubKeyErr error
-	signErr   error
+	pubKey     crypto.PublicKey
+	pubKeyErr  error
+	signErr    error
+	signerOpts crypto.SignerOpts
 }
 
 func (m *mockSignerVerifier) PublicKey(_ ...signature.PublicKeyOption) (crypto.PublicKey, error) {
@@ -51,10 +52,15 @@ func (m *mockSignerVerifier) PublicKey(_ ...signature.PublicKeyOption) (crypto.P
 	return m.pubKey, nil
 }
 
-func (m *mockSignerVerifier) SignMessage(_ io.Reader, _ ...signature.SignOption) ([]byte, error) {
+func (m *mockSignerVerifier) SignMessage(_ io.Reader, opts ...signature.SignOption) ([]byte, error) {
 	if m.signErr != nil {
 		return nil, m.signErr
 	}
+	var signerOpts crypto.SignerOpts
+	for _, opt := range opts {
+		opt.ApplyCryptoSignerOpts(&signerOpts)
+	}
+	m.signerOpts = signerOpts
 	return []byte("mock-signature"), nil
 }
 
@@ -142,7 +148,7 @@ func TestNewKMSKeypair(t *testing.T) {
 	}
 }
 
-func TestKMSKeypair_Methods(t *testing.T) {
+func TestKMSKeypair_ECDSA_Methods(t *testing.T) {
 	ecdsaPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("failed to generate ecdsa key: %v", err)
@@ -221,6 +227,9 @@ func TestKMSKeypair_Methods(t *testing.T) {
 		if !bytes.Equal(digest, expectedDigest) {
 			t.Errorf("expected digest %x, got %x", expectedDigest, digest)
 		}
+		if sv.signerOpts == nil || sv.signerOpts.HashFunc() != crypto.SHA256 {
+			t.Errorf("expected underlying signer to be given crypto.SHA256 opts, got %v", sv.signerOpts)
+		}
 	})
 
 	t.Run("SignData with error", func(t *testing.T) {
@@ -238,6 +247,113 @@ func TestKMSKeypair_Methods(t *testing.T) {
 			t.Error("expected an error, but got none")
 		} else if err.Error() != "signing failed" {
 			t.Errorf("expected error 'signing failed', got '%s'", err.Error())
+		}
+	})
+}
+
+// TestKMSKeypair_ECDSA_P521_SignData exercises the P-521 case reported in
+// https://github.com/sigstore/cosign/issues/5018, where a SHA-512 digest was
+// signed against a signer configured for SHA-256, producing a digest/hash
+// length mismatch for KMS providers (e.g. HashiCorp Vault) that validate the
+// crypto.SignerOpts passed alongside the digest.
+func TestKMSKeypair_ECDSA_P521_SignData(t *testing.T) {
+	ecdsaPriv, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ecdsa key: %v", err)
+	}
+	sv := &mockSignerVerifier{pubKey: &ecdsaPriv.PublicKey}
+	kp, err := NewSignerVerifierKeypair(sv, nil)
+	if err != nil {
+		t.Fatalf("failed to create KMSKeypair: %v", err)
+	}
+
+	data := []byte("some data to sign")
+	_, digest, err := kp.SignData(context.Background(), data)
+	if err != nil {
+		t.Fatalf("SignData returned an error: %v", err)
+	}
+	if len(digest) != crypto.SHA512.Size() {
+		t.Errorf("expected a SHA-512 digest of length %d, got %d", crypto.SHA512.Size(), len(digest))
+	}
+	if sv.signerOpts == nil || sv.signerOpts.HashFunc() != crypto.SHA512 {
+		t.Errorf("expected underlying signer to be given crypto.SHA512 opts matching the digest, got %v", sv.signerOpts)
+	}
+}
+
+func TestKMSKeypair_ED25519_Methods(t *testing.T) {
+	_, ed25519Priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+	sv := &mockSignerVerifier{pubKey: ed25519Priv.Public()}
+	kp, err := NewSignerVerifierKeypair(sv, &[]signature.LoadOption{})
+	if err != nil {
+		t.Fatalf("failed to create KMSKeypair: %v", err)
+	}
+
+	t.Run("GetHashAlgorithm", func(t *testing.T) {
+		if kp.GetHashAlgorithm() != protocommon.HashAlgorithm_HASH_ALGORITHM_UNSPECIFIED {
+			t.Errorf("expected HASH_ALGORITHM_UNSPECIFIED, got %v", kp.GetHashAlgorithm())
+		}
+	})
+
+	t.Run("GetSigningAlgorithm", func(t *testing.T) {
+		if kp.GetSigningAlgorithm() != protocommon.PublicKeyDetails_PKIX_ED25519 {
+			t.Errorf("expected PKIX_ED25519, got %v", kp.GetSigningAlgorithm())
+		}
+	})
+
+	t.Run("GetHint", func(t *testing.T) {
+		pubKeyBytes, err := x509.MarshalPKIXPublicKey(ed25519Priv.Public())
+		if err != nil {
+			t.Fatalf("marshalling public key: %v", err)
+		}
+		hashedBytes := sha256.Sum256(pubKeyBytes)
+		expectedHint := base64.StdEncoding.EncodeToString(hashedBytes[:])
+
+		if string(kp.GetHint()) != expectedHint {
+			t.Errorf("expected hint %s, got %s", expectedHint, string(kp.GetHint()))
+		}
+	})
+
+	t.Run("GetKeyAlgorithm", func(t *testing.T) {
+		if kp.GetKeyAlgorithm() != "ED25519" {
+			t.Errorf("expected ED25519, got %s", kp.GetKeyAlgorithm())
+		}
+	})
+
+	t.Run("GetPublicKey", func(t *testing.T) {
+		pub := kp.GetPublicKey()
+		if !pub.(ed25519.PublicKey).Equal(ed25519Priv.Public()) {
+			t.Error("public keys do not match")
+		}
+	})
+
+	t.Run("GetPublicKeyPem", func(t *testing.T) {
+		pem, err := kp.GetPublicKeyPem()
+		if err != nil {
+			t.Fatalf("GetPublicKeyPem returned an error: %v", err)
+		}
+		pub, err := cryptoutils.UnmarshalPEMToPublicKey([]byte(pem))
+		if err != nil {
+			t.Fatalf("failed to unmarshal pem: %v", err)
+		}
+		if !pub.(ed25519.PublicKey).Equal(ed25519Priv.Public()) {
+			t.Error("public keys do not match")
+		}
+	})
+
+	t.Run("SignData", func(t *testing.T) {
+		data := []byte("some data to sign")
+		sig, digest, err := kp.SignData(context.Background(), data)
+		if err != nil {
+			t.Fatalf("SignData returned an error: %v", err)
+		}
+		if string(sig) != "mock-signature" {
+			t.Errorf("expected signature 'mock-signature', got '%s'", string(sig))
+		}
+		if len(digest) != 0 {
+			t.Errorf("expected empty digest, got %x", digest)
 		}
 	})
 }
@@ -263,8 +379,8 @@ func TestSignerVerifierKeypairWithExplicitAlgorithm(t *testing.T) {
 	if !ed25519.Verify(ed25519Priv.Public().(ed25519.PublicKey), data, sig) {
 		t.Fatal("ed25519 signature did not verify over raw data")
 	}
-	if !bytes.Equal(digest, data) {
-		t.Fatalf("ed25519 digest = %x, want raw data %x", digest, data)
+	if digest != nil {
+		t.Fatalf("ed25519 digest = %x, want nil for pure Ed25519", digest)
 	}
 	if got, want := edKP.GetHashAlgorithm(), protocommon.HashAlgorithm_HASH_ALGORITHM_UNSPECIFIED; got != want {
 		t.Fatalf("ed25519 hash algorithm = %v, want %v", got, want)

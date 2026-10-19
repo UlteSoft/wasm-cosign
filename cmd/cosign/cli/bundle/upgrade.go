@@ -53,7 +53,7 @@ func (c *UpgradeCmd) Exec(ctx context.Context, bundlePath string) error {
 	}
 
 	if c.Out != "" {
-		err = os.WriteFile(c.Out, upgradedBundle, 0600)
+		err = os.WriteFile(c.Out, upgradedBundle, 0600) // #nosec G703 -- user-supplied output path is intentional
 		if err != nil {
 			return fmt.Errorf("writing upgraded bundle: %w", err)
 		}
@@ -123,10 +123,10 @@ func upgradeBundle(ctx context.Context, data []byte, rekorClient *client.Rekor) 
 		if entry.InclusionPromise != nil && entry.InclusionProof == nil {
 			ui.Infof(ctx, "Fetching missing inclusion proof from Rekor for log index %d...", entry.LogIndex)
 
-			params := entries.NewGetLogEntryByIndexParamsWithContext(ctx)
+			params := entries.NewGetLogEntryByIndexParams()
 			params.SetLogIndex(entry.LogIndex)
 
-			resp, err := rekorClient.Entries.GetLogEntryByIndex(params)
+			resp, err := rekorClient.Entries.GetLogEntryByIndexContext(ctx, params)
 			if err != nil {
 				return nil, fmt.Errorf("fetching log entry by index: %w", err)
 			}

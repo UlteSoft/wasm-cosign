@@ -62,10 +62,11 @@ import (
 )
 
 const (
-	rekorURL  = "http://127.0.0.1:3000"
-	fulcioURL = "http://127.0.0.1:5555"
-	tsaURL    = "http://127.0.0.1:3004"
-	certID    = "foo@bar.com"
+	rekorURL   = "http://127.0.0.1:3000"
+	rekorV2URL = "http://127.0.0.1:3003"
+	fulcioURL  = "http://127.0.0.1:5555"
+	tsaURL     = "http://127.0.0.1:3004"
+	certID     = "foo@bar.com"
 )
 
 var keyPass = []byte("hello")
@@ -526,7 +527,7 @@ func setLocalEnv(t *testing.T, dir string) error {
 
 // copyFile copies a file from a source to a destination.
 func copyFile(src, dst string) error {
-	f, err := os.Open(src)
+	f, err := os.Open(src) //nolint: gosec
 	if err != nil {
 		return fmt.Errorf("error opening source file: %w", err)
 	}

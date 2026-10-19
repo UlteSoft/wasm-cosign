@@ -44,14 +44,10 @@ type CreateCmd struct {
 	AttestationPath      string
 	BundlePath           string
 	CertificatePath      string
-	IgnoreTlog           bool
-	KeyRef               string
 	Out                  string
-	RekorURL             string
 	RFC3161TimestampPath string
 	SignaturePath        string
-	Sk                   bool
-	Slot                 string
+	options.CommonBundleCreateOptions
 }
 
 func (c *CreateCmd) Exec(ctx context.Context) (err error) {
@@ -211,7 +207,7 @@ func (c *CreateCmd) Exec(ctx context.Context) (err error) {
 	}
 
 	if c.Out != "" {
-		err = os.WriteFile(c.Out, bundleBytes, 0600)
+		err = os.WriteFile(c.Out, bundleBytes, 0600) // #nosec G703 -- user-supplied output path is intentional
 		if err != nil {
 			return err
 		}

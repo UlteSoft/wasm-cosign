@@ -34,6 +34,7 @@ import (
 	cert_test "github.com/sigstore/cosign/v3/internal/test"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
 	tsaclient "github.com/sigstore/timestamp-authority/v2/pkg/client"
+	tsatimestamp "github.com/sigstore/timestamp-authority/v2/pkg/generated/client/timestamp"
 	tsaserver "github.com/sigstore/timestamp-authority/v2/pkg/server"
 	"github.com/spf13/viper"
 
@@ -71,7 +72,6 @@ func TestTSAMTLS(t *testing.T) {
 		Upload:     true,
 		TlogUpload: false,
 		Cert:       pemLeafRef,
-		CertChain:  pemRootRef,
 	}
 	must(sign.SignCmd(t.Context(), ro, ko, so, []string{imgName}), t)
 
@@ -213,16 +213,21 @@ func TestSignBlobTSAMTLSWithSigningConfig(t *testing.T) {
 	_, err = sign.SignBlobCmd(t.Context(), ro, signingKO, blobPath, "", "", true, "", "", false)
 	must(err, t)
 
+	trBytes, err := trustedRoot.MarshalJSON()
+	must(err, t)
+	trustedRootFile := mkfile(string(trBytes), td, t)
+
 	verifyKO := options.KeyOpts{
 		KeyRef:          pubKey,
 		BundlePath:      bundlePath,
-		TrustedMaterial: trustedRoot,
 		NewBundleFormat: true,
 	}
 
 	verifyCmd := cliverify.VerifyBlobCmd{
-		KeyOpts:    verifyKO,
-		IgnoreTlog: true,
+		KeyOpts:             verifyKO,
+		IgnoreTlog:          true,
+		UseSignedTimestamps: true,
+		TrustedRootPath:     trustedRootFile,
 	}
 	must(verifyCmd.Exec(context.Background(), blobPath), t)
 }
@@ -329,7 +334,6 @@ func TestTSAMTLSWithSigningConfig(t *testing.T) {
 		Upload:          true,
 		TlogUpload:      false,
 		Cert:            pemLeafRef,
-		CertChain:       pemRootRef,
 		NewBundleFormat: true,
 	}
 	must(sign.SignCmd(t.Context(), ro, ko, so, []string{imgName}), t)
@@ -339,10 +343,11 @@ func TestTSAMTLSWithSigningConfig(t *testing.T) {
 	trustedRootFile := mkfile(string(trBytes), td, t)
 
 	verifyCmd := cliverify.VerifyCommand{
-		IgnoreTlog:      true,
-		IgnoreSCT:       true,
-		CheckClaims:     true,
-		NewBundleFormat: true,
+		IgnoreTlog:          true,
+		IgnoreSCT:           true,
+		CheckClaims:         true,
+		NewBundleFormat:     true,
+		UseSignedTimestamps: true,
 		CommonVerifyOptions: options.CommonVerifyOptions{
 			TrustedRootPath: trustedRootFile,
 		},
@@ -405,6 +410,7 @@ func setUpTSAServerWithTLS(t *testing.T, td, timestampCACert, timestampServerKey
 	viper.Set("timestamp-signer", "memory")
 	viper.Set("timestamp-signer-hash", "sha256")
 	viper.Set("disable-ntp-monitoring", true)
+	viper.Set("default-policy-oid", "1.3.6.1.4.1.57264.2")
 	viper.Set("tls-host", "0.0.0.0")
 	viper.Set("tls-port", 3000)
 	viper.Set("tls-ca", timestampCACert)
@@ -414,7 +420,7 @@ func setUpTSAServerWithTLS(t *testing.T, td, timestampCACert, timestampServerKey
 	tsaServer := httptest.NewServer(tsaAPIServer.GetHandler())
 	tsaClient, err := tsaclient.GetTimestampClient(tsaServer.URL)
 	must(err, t)
-	tsaChain, err := tsaClient.Timestamp.GetTimestampCertChain(nil)
+	tsaChain, err := tsaClient.Timestamp.GetTimestampCertChain(tsatimestamp.NewGetTimestampCertChainParams())
 	must(err, t)
 	timestampServerURL := tsaServer.URL + "/api/v1/timestamp"
 	timestampChainFile := mkfile(tsaChain.Payload, td, t)

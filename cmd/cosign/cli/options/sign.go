@@ -109,6 +109,7 @@ func (o *SignOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.PayloadPath, "payload", "",
 		"path to a payload file to use rather than generating one")
 	// _ = cmd.MarkFlagFilename("payload") // no typical extensions
+	_ = cmd.Flags().MarkDeprecated("payload", "payload will always be generated automatically in future versions")
 
 	cmd.Flags().BoolVarP(&o.Recursive, "recursive", "r", false,
 		"if a multi-arch image is specified, additionally sign each discrete image")
@@ -116,6 +117,7 @@ func (o *SignOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.Attachment, "attachment", "",
 		"DEPRECATED, related image attachment to sign (sbom), default none")
 	_ = cmd.MarkFlagFilename("attachment", sbomExts...)
+	_ = cmd.Flags().MarkDeprecated("attachment", "please use OCI referrers for attachments; see `cosign attach sbom --registry-referrers-mode=oci-1-1 --help`")
 
 	cmd.Flags().BoolVarP(&o.SkipConfirmation, "yes", "y", false,
 		"skip confirmation prompts for non-destructive operations")
@@ -151,6 +153,7 @@ func (o *SignOptions) AddFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringSliceVar(&o.SignContainerIdentities, "sign-container-identity", nil,
 		"manually set the .critical.docker-reference field for the signed identity, which is useful when image proxies are being used where the pull reference should match the signature, this flag is comma delimited. ex: --sign-container-identity=identity1,identity2")
+	_ = cmd.Flags().MarkDeprecated("sign-container-identity", "not possible when OCI referrers become the default behavior")
 
 	cmd.Flags().BoolVar(&o.RecordCreationTimestamp, "record-creation-timestamp", false, "set the createdAt timestamp in the signature artifact to the time it was created; by default, cosign sets this to the zero value")
 	_ = cmd.Flags().MarkDeprecated("record-creation-timestamp", "not used with the new bundle format")
@@ -159,10 +162,11 @@ func (o *SignOptions) AddFlags(cmd *cobra.Command) {
 	_ = cmd.Flags().MarkDeprecated("new-bundle-format", "this will be the only supported format in future versions")
 
 	cmd.Flags().BoolVar(&o.UseSigningConfig, "use-signing-config", true,
-		"whether to use a TUF-provided signing config for the service URLs. Must set --new-bundle-format, which will store verification material in the new format")
+		"whether to use a TUF-provided signing config for the service URLs")
+	_ = cmd.Flags().MarkDeprecated("use-signing-config", "an offline signing flag will be added in the future; TUF will continue to provide a signing config by default if one is not provided manually")
 
 	cmd.Flags().StringVar(&o.SigningConfigPath, "signing-config", "",
-		"path to a signing config file. Must provide --new-bundle-format, which will store verification material in the new format")
+		"path to a signing config file")
 
 	cmd.MarkFlagsMutuallyExclusive("use-signing-config", "signing-config")
 
