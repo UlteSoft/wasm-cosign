@@ -37,7 +37,6 @@ import (
 	"github.com/sigstore/cosign/v3/pkg/cosign"
 	"github.com/sigstore/cosign/v3/pkg/cosign/bundle"
 	"github.com/sigstore/cosign/v3/pkg/oci/static"
-	sigs "github.com/sigstore/cosign/v3/pkg/signature"
 	"github.com/sigstore/cosign/v3/pkg/wasm"
 	sgbundle "github.com/sigstore/sigstore-go/pkg/bundle"
 	sgverify "github.com/sigstore/sigstore-go/pkg/verify"

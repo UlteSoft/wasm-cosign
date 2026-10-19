@@ -29,6 +29,7 @@ import (
 	"github.com/sigstore/cosign/v3/cmd/cosign/cli/generate"
 	"github.com/sigstore/cosign/v3/cmd/cosign/cli/options"
 	"github.com/sigstore/cosign/v3/cmd/cosign/cli/signcommon"
+	wasmsecurecli "github.com/sigstore/cosign/v3/cmd/cosign/cli/wasmsecure"
 	"github.com/sigstore/cosign/v3/internal/ui"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
 	"github.com/sigstore/cosign/v3/pkg/wasm"
@@ -41,6 +42,7 @@ func Wasm() *cobra.Command {
 		Short: "Utilities for working with WebAssembly modules and embedded wasm-cosign signatures",
 	}
 
+	cmd.AddCommand(wasmsecurecli.Command())
 	cmd.AddCommand(wasmSign())
 	cmd.AddCommand(wasmVerify())
 	cmd.AddCommand(wasmListSignatures())

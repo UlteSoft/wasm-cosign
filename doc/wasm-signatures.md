@@ -1,5 +1,9 @@
 # WebAssembly Module Signing and Signature Management
 
+For embedded WSEA signatures with local X.509/CRL enforcement in UWVM, see
+[UWVM WSEA secure execution](wasm-secure-execution.md) and `cosign wasm secure`.
+The embedded Sigstore workflow described below remains separate.
+
 This document describes cosign's WebAssembly-specific signing commands and the
 embedded signature model used by `cosign wasm`. It is intended for users who
 need a complete module-level signing workflow, similar in spirit to the way PE

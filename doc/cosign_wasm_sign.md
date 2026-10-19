@@ -39,7 +39,6 @@ cosign wasm sign <module> [flags]
       --timestamp-client-key string      path to the X.509 private key file in PEM format to be used, together with the 'timestamp-client-cert' value, for the connection to the TSA Server
       --timestamp-server-name string     SAN name to use as the 'ServerName' tls.Config field to verify the mTLS connection to the TSA Server
       --trusted-root string              optional path to a TrustedRoot JSON file to verify a signature after signing
-      --use-signing-config               whether to use a TUF-provided signing config for the service URLs. Must provide --bundle or --wasm-output, which will output verification material in the new format (default true)
       --wasm-output string               write a signed WebAssembly module to FILE with the Sigstore bundle appended in a wasm-cosign custom section
   -y, --yes                              skip confirmation prompts for non-destructive operations
 ```

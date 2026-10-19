@@ -35,3 +35,9 @@ sigstore-conformance
 conformance
 
 **verify-experimental*
+
+# Generated WSEA qualification artifacts and Python caches
+/test/wsea/results/
+/test/wsea/go_*_sources*.sha256
+__pycache__/
+*.py[cod]

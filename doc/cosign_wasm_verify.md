@@ -18,6 +18,7 @@ cosign wasm verify <module> [flags]
 ### Options
 
 ```
+      --allow-certificate-chain                         allow X.509 certificate chains in bundle verification material for v0.3+ bundles
       --bundle string                                   path to bundle FILE
       --certificate-github-workflow-name string         contains the workflow claim from the GitHub OIDC Identity token that contains the name of the executed workflow.
       --certificate-github-workflow-ref string          contains the ref claim from the GitHub OIDC Identity token that contains the git ref that the workflow run was based upon.
@@ -28,7 +29,6 @@ cosign wasm verify <module> [flags]
       --certificate-identity-regexp string              A regular expression alternative to --certificate-identity. Accepts the Go regular expression syntax described at https://golang.org/s/re2syntax. Either --certificate-identity or --certificate-identity-regexp must be set for keyless flows.
       --certificate-oidc-issuer string                  The OIDC issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or https://oauth2.sigstore.dev/auth. Either --certificate-oidc-issuer or --certificate-oidc-issuer-regexp must be set for keyless flows.
       --certificate-oidc-issuer-regexp string           A regular expression alternative to --certificate-oidc-issuer. Accepts the Go regular expression syntax described at https://golang.org/s/re2syntax. Either --certificate-oidc-issuer or --certificate-oidc-issuer-regexp must be set for keyless flows.
-      --experimental-oci11                              set to true to enable experimental OCI 1.1 behaviour (unrelated to bundle format)
   -h, --help                                            help for verify
       --insecure-ignore-sct                             when set, verification will not check that a certificate contains an embedded SCT, a proof of inclusion in a certificate transparency log
       --insecure-ignore-tlog                            ignore transparency log verification, to be used when an artifact signature has not been uploaded to the transparency log. Artifacts cannot be publicly verified when not included in a log
@@ -36,7 +36,7 @@ cosign wasm verify <module> [flags]
       --max-workers int                                 the amount of maximum workers for parallel executions (default 10)
       --sk                                              whether to use a hardware security key
       --slot string                                     security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|key-management)
-      --trusted-root string                             Path to a Sigstore TrustedRoot JSON file. Requires --new-bundle-format to be set.
+      --trusted-root string                             Path to a Sigstore TrustedRoot JSON file
       --use-signed-timestamps                           verify rfc3161 timestamps
 ```
 

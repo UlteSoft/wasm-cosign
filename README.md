@@ -284,6 +284,12 @@ Pushing signature to: us.gcr.io/dlorenc-vmtest2/demo:sha256-124e1fdee94fe5c5f902
 
 #### WASM
 
+For embedded WSEA signatures enforced by UWVM, use `cosign wasm secure`
+(`policy-init`, `policy-update`, `sign`, `verify`, `fetch`). See the
+[offline WSEA security workflow](doc/wasm-secure-execution.md) for protected local
+trust, X.509/CRL verification, HTTPS evidence downloads and per-module VM selection.
+For embedded Sigstore module signatures, see [WebAssembly signing](doc/wasm-signatures.md).
+
 Web Assembly Modules can also be stored in an OCI registry, using this [specification](https://github.com/solo-io/wasm/tree/master/spec).
 
 Cosign can upload these using the `cosign wasm upload` command:
