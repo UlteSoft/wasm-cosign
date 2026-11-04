@@ -128,9 +128,9 @@ func TestVerifySecurityBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			copy := newFixture(t)
-			tc.change(&copy)
-			_, e := Verify(copy.module, copy.ev, copy.p, copy.root, copy.now)
+			candidate := newFixture(t)
+			tc.change(&candidate)
+			_, e := Verify(candidate.module, candidate.ev, candidate.p, candidate.root, candidate.now)
 			if e == nil || !strings.Contains(e.Error(), tc.code) {
 				t.Fatalf("got %v, expected %s", e, tc.code)
 			}
@@ -203,7 +203,7 @@ func TestExclusivePublishAndHTTPSBoundary(t *testing.T) {
 }
 func FuzzParse(f *testing.F) {
 	f.Add([]byte{0xd2, 0x84, 0x43, 0xa1, 0x01, 0x26, 0xa0})
-	f.Fuzz(func(t *testing.T, b []byte) { _, _, _, _ = Parse(b) })
+	f.Fuzz(func(_ *testing.T, b []byte) { _, _, _, _ = Parse(b) })
 }
 
 func TestIntermediatePathRequiresEveryIssuerCRL(t *testing.T) {

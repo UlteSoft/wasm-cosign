@@ -48,7 +48,7 @@ func TestUntrustedFIFOSymlinkAndProtectedHardlink(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e := ProtectedPath(regular, false); e == nil {
-		t.Fatal("accepted hardlinked trust file")
+		t.Fatal("accepted hard-linked trust file")
 	}
 }
 
@@ -114,7 +114,6 @@ func TestProtectedMonotonicState(t *testing.T) {
 	if e = CheckState(pb, f.root, f.p, f.m, f.now); e == nil || !strings.Contains(e.Error(), "CERT_004") {
 		t.Fatalf("followed or ignored symlink revocation marker: %v", e)
 	}
-
 }
 
 func TestCurrentStateClockObservation(t *testing.T) {

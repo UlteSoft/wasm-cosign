@@ -52,11 +52,13 @@ func FetchHTTPS(ctx context.Context, rawURL string, limit int64) ([]byte, error)
 		}
 		return check(req.URL)
 	}}
-	req, e := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	// The operator explicitly selects this HTTPS URL. Private HTTPS endpoints
+	// are supported; the same scheme/credential checks apply to every redirect.
+	req, e := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil) // #nosec G704 -- intentional operator-directed HTTPS fetch
 	if e != nil {
 		return nil, e
 	}
-	resp, e := client.Do(req)
+	resp, e := client.Do(req) // #nosec G704 -- validated HTTPS redirects, normal TLS verification, bounded response
 	if e != nil {
 		return nil, e
 	}

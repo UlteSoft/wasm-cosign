@@ -15,7 +15,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -134,7 +133,8 @@ func TestFetchHTTPSAuthenticatedTLS(t *testing.T) {
 				}
 				env = append(env, v)
 			}
-			cmd.Env = append(env, "SSL_CERT_FILE="+tc.roots, "SSL_CERT_DIR="+emptyRoots, "WSEA_HTTPS_TEST_MODE="+tc.mode, "WSEA_HTTPS_TEST_URL="+server.URL)
+			env = append(env, "SSL_CERT_FILE="+tc.roots, "SSL_CERT_DIR="+emptyRoots, "WSEA_HTTPS_TEST_MODE="+tc.mode, "WSEA_HTTPS_TEST_URL="+server.URL)
+			cmd.Env = env
 			output, e := cmd.CombinedOutput()
 			if e != nil {
 				t.Fatalf("TLS child: %v\n%s", e, output)
@@ -174,7 +174,7 @@ func TestFetchHTTPSChild(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			_, e := FetchHTTPS(context.Background(), base+tc.path, 128)
 			if e == nil || !strings.Contains(e.Error(), tc.message) {
-				t.Fatal(fmt.Sprintf("expected %s, got %v", tc.message, e))
+				t.Fatalf("expected %s, got %v", tc.message, e)
 			}
 		})
 	}

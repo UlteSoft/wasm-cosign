@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 The Sigstore Authors.
+# Licensed under the Apache License, Version 2.0.
 """Qualify static production secure commands on real Linux QEMU targets.
 
 Run only inside the existing authorized cgroup. A completed UWVM target record

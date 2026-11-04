@@ -67,6 +67,8 @@ func Certificates(data []byte) ([]*x509.Certificate, error) {
 	}
 	return out, nil
 }
+
+//nolint:unparam // Parser oracle retains decoded results; malformed-input tests currently inspect its errors.
 func parseCRLs(data []byte) ([]*x509.RevocationList, error) {
 	var out []*x509.RevocationList
 	for len(bytes.TrimSpace(data)) > 0 {

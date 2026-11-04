@@ -173,7 +173,7 @@ func ExtractAll(module []byte) ([]byte, []Evidence, error) {
 		return nil, nil, errors.New("SIG_002: malformed embedded evidence array")
 	}
 	version, e := r.head(0)
-	if e != nil || !(version == 1 && count == 4 || version == 2 && count == 2) {
+	if e != nil || (version != 1 || count != 4) && (version != 2 || count != 2) {
 		return nil, nil, errors.New("SIG_002: unsupported embedded evidence version")
 	}
 	n := uint64(1)

@@ -38,13 +38,14 @@ func ProtectedPath(path string, stateDir bool) error {
 			return errors.New("security path is writable by group or others")
 		}
 		if path == target {
-			if stateDir {
+			switch {
+			case stateDir:
 				if !st.IsDir() || raw.Uid != uint32(os.Geteuid()) || st.Mode().Perm() != 0700 {
 					return errors.New("state directory requires effective user ownership and mode 0700")
 				}
-			} else if raw.Nlink != 1 {
+			case raw.Nlink != 1:
 				return errors.New("security files must not have hard links")
-			} else if !st.Mode().IsRegular() {
+			case !st.Mode().IsRegular():
 				return errors.New("security input must be a regular file")
 			}
 		}

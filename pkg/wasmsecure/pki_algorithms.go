@@ -55,9 +55,10 @@ func strictPSS(ai pkix.AlgorithmIdentifier, hash crypto.Hash) bool {
 		return false
 	}
 	expected := asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
-	if hash == crypto.SHA384 {
+	switch hash {
+	case crypto.SHA384:
 		expected[len(expected)-1] = 2
-	} else if hash == crypto.SHA512 {
+	case crypto.SHA512:
 		expected[len(expected)-1] = 3
 	}
 	if !p.Hash.Algorithm.Equal(expected) || !nullOrAbsent(p.Hash.Parameters) || !p.MGF.Algorithm.Equal(asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 8}) {
@@ -84,6 +85,8 @@ func strictPSS(ai pkix.AlgorithmIdentifier, hash crypto.Hash) bool {
 // Go x509 verifies certificate/CRL signatures and exact inner/outer algorithm
 // equality. This additionally rejects unknown/duplicate PSS parameters and
 // checks canonical algorithm identifiers before relying on those signatures.
+//
+//nolint:unparam // Test oracle keeps the algorithm explicit; production PKI verification uses the shared native core.
 func allowedPKISignature(algorithm x509.SignatureAlgorithm, raw []byte) bool {
 	var signed signedDER
 	rest, e := asn1.Unmarshal(raw, &signed)
@@ -94,9 +97,10 @@ func allowedPKISignature(algorithm x509.SignatureAlgorithm, raw []byte) bool {
 	switch algorithm {
 	case x509.ECDSAWithSHA256, x509.ECDSAWithSHA384, x509.ECDSAWithSHA512:
 		suffix := 2
-		if algorithm == x509.ECDSAWithSHA384 {
+		switch algorithm {
+		case x509.ECDSAWithSHA384:
 			suffix = 3
-		} else if algorithm == x509.ECDSAWithSHA512 {
+		case x509.ECDSAWithSHA512:
 			suffix = 4
 		}
 		return ai.Algorithm.Equal(asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, suffix}) && len(ai.Parameters.FullBytes) == 0
@@ -104,9 +108,10 @@ func allowedPKISignature(algorithm x509.SignatureAlgorithm, raw []byte) bool {
 		return ai.Algorithm.Equal(asn1.ObjectIdentifier{1, 3, 101, 112}) && len(ai.Parameters.FullBytes) == 0 && canonicalEd25519Signature(signed.Signature.Bytes)
 	case x509.SHA256WithRSA, x509.SHA384WithRSA, x509.SHA512WithRSA:
 		suffix := 11
-		if algorithm == x509.SHA384WithRSA {
+		switch algorithm {
+		case x509.SHA384WithRSA:
 			suffix = 12
-		} else if algorithm == x509.SHA512WithRSA {
+		case x509.SHA512WithRSA:
 			suffix = 13
 		}
 		return ai.Algorithm.Equal(asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, suffix}) && nullOrAbsent(ai.Parameters)
@@ -115,9 +120,10 @@ func allowedPKISignature(algorithm x509.SignatureAlgorithm, raw []byte) bool {
 			return false
 		}
 		hash := crypto.SHA256
-		if algorithm == x509.SHA384WithRSAPSS {
+		switch algorithm {
+		case x509.SHA384WithRSAPSS:
 			hash = crypto.SHA384
-		} else if algorithm == x509.SHA512WithRSAPSS {
+		case x509.SHA512WithRSAPSS:
 			hash = crypto.SHA512
 		}
 		return strictPSS(ai, hash)
@@ -127,7 +133,7 @@ func allowedPKISignature(algorithm x509.SignatureAlgorithm, raw []byte) bool {
 func allowedPublicKey(key any) bool {
 	switch k := key.(type) {
 	case *ecdsa.PublicKey:
-		return k != nil && k.X != nil && k.Y != nil && (k.Curve == elliptic.P256() || k.Curve == elliptic.P384() || k.Curve == elliptic.P521()) && k.Curve.IsOnCurve(k.X, k.Y)
+		return k != nil && k.X != nil && k.Y != nil && (k.Curve == elliptic.P256() || k.Curve == elliptic.P384() || k.Curve == elliptic.P521()) && k.IsOnCurve(k.X, k.Y) //nolint:staticcheck // SA1019: preserve explicit rejection of malformed caller-supplied coordinates.
 	case ed25519.PublicKey:
 		return strongEd25519Encoding(k)
 	case *rsa.PublicKey:

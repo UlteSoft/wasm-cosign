@@ -4,8 +4,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/sigstore/cosign/v3/internal/wasmcli"
 	"os"
+
+	"github.com/sigstore/cosign/v3/internal/wasmcli"
 )
 
 func main() {

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 The Sigstore Authors.
+# Licensed under the Apache License, Version 2.0.
 """Cross-check existing OpenSSL fixtures, Go signatures and production VM gates.
 
 Run only inside the authorized Linux cgroup. This script reuses the supplied

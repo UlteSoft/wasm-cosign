@@ -170,7 +170,9 @@ func matchingKey(p algorithmInfo, key any) bool {
 	switch p.kind {
 	case 'e':
 		k, ok := key.(*ecdsa.PublicKey)
-		return ok && k != nil && k.Curve == p.curve && k.X != nil && k.Y != nil && p.curve.IsOnCurve(k.X, k.Y)
+		// Inspect caller-supplied coordinates before signing, including malformed
+		// legacy PublicKey structs. Keep the frozen explicit on-curve rejection.
+		return ok && k != nil && k.Curve == p.curve && k.X != nil && k.Y != nil && p.curve.IsOnCurve(k.X, k.Y) //nolint:staticcheck // SA1019: intentional validation of raw caller-supplied coordinates.
 	case 'd':
 		k, ok := key.(ed25519.PublicKey)
 		return ok && strongEd25519Encoding(k)

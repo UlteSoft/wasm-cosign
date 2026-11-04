@@ -52,14 +52,6 @@ func loadPolicy(path string) (wasmsecure.Policy, []byte, []byte, error) {
 	roots, e := wasmsecure.ReadBounded(p.TrustRoot, wasmsecure.MaxEvidenceBytes)
 	return p, b, roots, e
 }
-func validate(module []byte, e wasmsecure.Evidence, p wasmsecure.Policy, pb, roots []byte) (wasmsecure.Manifest, error) {
-	now := time.Now()
-	m, err := wasmsecure.Verify(module, e, p, roots, now)
-	if err == nil {
-		err = wasmsecure.CheckCurrentState(pb, roots, p, m, now)
-	}
-	return m, err
-}
 func output(c *cobra.Command, m wasmsecure.Manifest) error {
 	return json.NewEncoder(c.OutOrStdout()).Encode(struct {
 		Status   string              `json:"status"`
@@ -125,7 +117,7 @@ func signCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		var contributions []wasmsecure.Evidence
+		contributions := make([]wasmsecure.Evidence, 0, 1)
 		if appendSignature {
 			now := time.Now()
 			existing, err := wasmsecure.VerifyEmbeddedPartial(module, p, roots, now)

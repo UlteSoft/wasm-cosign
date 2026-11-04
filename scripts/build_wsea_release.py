@@ -17,6 +17,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,9 +77,14 @@ def main():
 
     def run(name, command):
         print(name, flush=True)
-        with (work / (name + '.log')).open('w') as log:
-            subprocess.run(list(map(str, command)), cwd=ROOT, env=env,
-                           stdout=log, stderr=subprocess.STDOUT, check=True)
+        log_path = work / (name + '.log')
+        try:
+            with log_path.open('w') as log:
+                subprocess.run(list(map(str, command)), cwd=ROOT, env=env,
+                               stdout=log, stderr=subprocess.STDOUT, check=True)
+        except subprocess.CalledProcessError:
+            sys.stderr.write(log_path.read_text(errors='replace')[-16000:])
+            raise
 
     run('source-guard', ['python3', 'scripts/check_wsea_build.py'])
     run('openssl', ['python3', 'scripts/prepare_wsea_openssl.py'])

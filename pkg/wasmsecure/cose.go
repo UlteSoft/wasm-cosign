@@ -22,8 +22,6 @@ const (
 	MaxEvidenceBytes         = 4 << 20
 )
 
-var protected = []byte{0xa1, 0x01, 0x26}
-
 // Manifest is authenticated in its entirety by the detached COSE signature.
 // Capabilities: 1 WASI imports, 2 filesystem, 4 sockets, 8 ROS1, 16 ROS2,
 // 32 arbitrary host imports. Unknown bits are always rejected.
@@ -51,7 +49,7 @@ func validID(id string) bool {
 		return false
 	}
 	for _, c := range []byte(id) {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '.' && c != '_' && c != '-' {
 			return false
 		}
 	}
@@ -100,10 +98,6 @@ func (m Manifest) payload() []byte {
 	b = appendHead(b, 0, m.NotAfter)
 	b = appendText(b, m.ABI)
 	return appendHead(b, 0, m.Capabilities)
-}
-func signingBytes(payload []byte) []byte {
-	p, _ := profile(AlgorithmES256)
-	return signingBytesFor(payload, p)
 }
 
 // Sign authenticates every module byte using the exact algorithm in m.Algorithm.

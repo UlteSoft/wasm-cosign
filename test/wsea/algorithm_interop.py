@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 The Sigstore Authors.
+# Licensed under the Apache License, Version 2.0.
 """Real multi-algorithm OpenSSL -> Go -> C++/VM interoperability on Linux.
 
 Imports only the supplied matrix-driver source; it never builds a candidate.
