@@ -16,10 +16,17 @@
 
 set -e
 
+make bundled-openssl
+export PKG_CONFIG_PATH="${WSEA_OPENSSL_ROOT:-$PWD/.wsea-build/openssl}/pkgconfig"
+export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+export PKG_CONFIG_SYSROOT_DIR=
+export CGO_CPPFLAGS="${CGO_CPPFLAGS:-} $(cat "${WSEA_OPENSSL_ROOT:-$PWD/.wsea-build/openssl}/cgo-cppflags")"
+
 # Verify that generated Markdown docs are up-to-date.
 tmpdir=$(mktemp -d)
-go run -tags pivkey,pkcs11key,cgo cmd/help/main.go --dir "$tmpdir"
+trap 'rm -rf "$tmpdir"' EXIT
+go run ./cmd/help --dir "$tmpdir"
 echo "###########################################"
 echo "If diffs are found, run: make docgen"
 echo "###########################################"
-diff -Naur "$tmpdir" doc/
+diff -Naur "$tmpdir" doc/wsea-cli/

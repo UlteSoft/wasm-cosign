@@ -43,7 +43,12 @@ make test
 
 #### Conformance tests
 
-To run the conformance tests, first install the conformance test runner:
+For this WSEA product, use `make test` and the paired interoperability tests in
+`test/wsea/README.md`. The upstream Sigstore conformance workflow below is
+historical and requires a separate upstream cosign executable: this product
+does not implement its blob/container commands.
+
+To run those historical conformance tests, first install the conformance test runner:
 
 ```shell
 make conformance-runner

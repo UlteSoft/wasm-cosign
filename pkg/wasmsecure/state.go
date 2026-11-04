@@ -48,6 +48,9 @@ func checkState(policyBytes, rootBytes []byte, p Policy, m Manifest, now time.Ti
 	if e != nil {
 		return e
 	}
+	if len(b) == 0 || b[len(b)-1] != '\n' {
+		return errors.New("POL_002: invalid security state encoding")
+	}
 	// A revocation learned and authenticated by the VM is permanent for the
 	// publisher SPKI. Neither an older still-fresh CRL nor a policy version bump
 	// may make this key trusted again. Lstat also rejects symlink markers.
@@ -110,8 +113,11 @@ func checkState(policyBytes, rootBytes []byte, p Policy, m Manifest, now time.Ti
 		}
 		now = observed
 	}
-	if now.Unix() < 0 || uint64(now.Unix()) < t {
+	if now.Unix() < 1577836800 || uint64(now.Unix()) < t {
 		return errors.New("POL_004: trusted wall clock moved backwards")
+	}
+	if m.validUntil != 0 && uint64(now.Unix()) >= m.validUntil {
+		return errors.New("POL_004: authenticated evidence expired during verification")
 	}
 	seen := map[string]bool{}
 	for _, line := range lines[2:] {

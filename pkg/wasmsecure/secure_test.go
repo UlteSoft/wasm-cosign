@@ -70,7 +70,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	f.ev.CRLs = f.crl(t, f.now.Add(-time.Minute), f.now.Add(time.Hour), false)
 	f.p = Policy{Version: 1, TrustRoot: "/secure/root.pem", StateDir: "/secure/state", MaxCRLAgeSeconds: 86400, MaxModuleBytes: 104857600, Modules: map[string]ModuleRule{"test.module": {ID: "test.module", ABI: "uwvm2", SPKI: SPKIDigest(f.leaf.RawSubjectPublicKeyInfo), MinVersion: 1, AllowedCapabilities: 63}}}
-	f.m = Manifest{ModuleID: "test.module", Version: 2, Epoch: 1, NotBefore: uint64(f.now.Add(-time.Minute).Unix()), NotAfter: uint64(f.now.Add(time.Hour).Unix()), ABI: "uwvm2", Capabilities: 1}
+	f.m = Manifest{Embedded: true, ModuleID: "test.module", Version: 2, Epoch: 1, NotBefore: uint64(f.now.Add(-time.Minute).Unix()), NotAfter: uint64(f.now.Add(time.Hour).Unix()), ABI: "uwvm2", Capabilities: 1}
 	f.ev.Signature, e = Sign(f.module, f.m, f.key)
 	if e != nil {
 		t.Fatal(e)

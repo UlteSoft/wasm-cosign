@@ -3,3 +3,6 @@
 # https://github.com/github/linguist.
 
 doc/cosign*.md linguist-generated=true
+doc/wsea-cli/*.md linguist-generated=true whitespace=-blank-at-eof
+# Keep the authenticated upstream source byte-for-byte, including formatting.
+third_party/openssl/upstream/** linguist-vendored=true -whitespace

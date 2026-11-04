@@ -20,13 +20,14 @@ builds:
   dir: .
   main: ./cmd/cosign
   env:
-  - CGO_ENABLED=0
+  - CGO_ENABLED=1
+  - CGO_CPPFLAGS={{ .Env.CGO_CPPFLAGS }}
+  - PKG_CONFIG_PATH={{ .Env.WSEA_OPENSSL_ROOT }}/pkgconfig
+  - PKG_CONFIG_LIBDIR={{ .Env.WSEA_OPENSSL_ROOT }}/pkgconfig
+  - PKG_CONFIG_SYSROOT_DIR=
   flags:
   - -trimpath
-  - -tags
-  - "{{ .Env.GIT_HASH }}"
-  - -tags
-  - "{{ .Env.GIT_VERSION }}"
+  - -tags=netgo,osusergo,wsea_static
   ldflags:
   - -extldflags "-static"
   - "{{ .Env.LDFLAGS }}"

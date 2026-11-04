@@ -36,9 +36,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest]
     env:
       OS: ${{ matrix.os }}
+      PKG_CONFIG_PATH: ${{ github.workspace }}/.wsea-build/openssl/pkgconfig
+      PKG_CONFIG_LIBDIR: ${{ github.workspace }}/.wsea-build/openssl/pkgconfig
+      PKG_CONFIG_SYSROOT_DIR: ''
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,8 +75,27 @@ jobs:
           check-latest: true
           cache: false
 
-      - name: Run Go tests
-        run: go test -covermode atomic -coverprofile coverage.txt $(go list ./... | grep -v third_party/)
+      - name: Native WSEA dependencies
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install -y g++ pkg-config perl make python3
+          else
+            brew install pkgconf
+          fi
+
+      - name: Check shared source and build bundled OpenSSL
+        run: |
+          make bundled-openssl
+          echo "CGO_CPPFLAGS=$(cat .wsea-build/openssl/cgo-cppflags)" >> "$GITHUB_ENV"
+          python3 test/wsea/bundled_openssl_test.py
+
+      - name: Run WSEA product tests
+        shell: bash
+        run: |
+          umask 077
+          CGO_ENABLED=1 go test -covermode atomic -coverprofile coverage.txt ./cmd/cosign ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 
       - name: Upload Coverage Report
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -82,9 +104,12 @@ jobs:
 
       - name: Run Go tests w/ `-race`
         if: ${{ runner.os == 'Linux' }}
-        run: go test -race $(go list ./... | grep -v third_party/)
+        run: |
+          umask 077
+          CGO_ENABLED=1 go test -race ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 
   e2e-tests:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     name: Run e2e tests
     runs-on: ubuntu-latest
     permissions:
@@ -188,6 +213,7 @@ jobs:
         uses: chainguard-dev/actions/kind-diag@84b1be4c638f12d4256ddddef17af98853b6d0d9 # v1.6.40
 
   e2e-windows-powershell-tests:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     name: Run PowerShell E2E tests
     runs-on: windows-latest
     permissions:
@@ -248,4 +274,6 @@ jobs:
       - name: Check license headers
         run: |
           set -e
-          addlicense -check -l apache -c 'The Sigstore Authors' -ignore "third_party/**" -v *
+          addlicense -check -l apache -c 'The Sigstore Authors' \
+            -ignore "third_party/**" -ignore "internal/wseanative/wsea.h" \
+            -ignore "tools/dependencies/build_openssl.py" -v *

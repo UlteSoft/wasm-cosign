@@ -41,3 +41,16 @@ conformance
 /test/wsea/go_*_sources*.sha256
 __pycache__/
 *.py[cod]
+
+# Source-owned OpenSSL includes upstream fixtures named signature and *.out.
+!third_party/openssl/upstream/**
+/.wsea-build/
+
+# Generated local qualification output never belongs in source releases.
+/test/wsea/*results*/
+/test/wsea/*report*.json
+/test/wsea/*receipt*.json
+/test/wsea/20*/
+/test/wsea/*-20*/
+/release-assets/
+*.log

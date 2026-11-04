@@ -93,9 +93,18 @@ jobs:
       - name: check disk space
         run: df -h
 
+      # Validate the actual counterpart selected for this paired release.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: UlteSoft/uwvm2-ros
+          ref: ${{ vars.WSEA_UWVM_REVISION || 'main' }}
+          path: .wsea-uwvm
+          persist-credentials: false
+
       - name: goreleaser snapshot
         run: make snapshot
         env:
+          UWVM2_ROOT: ${{ github.workspace }}/.wsea-uwvm
           PROJECT_ID: honk-fake-project
           RUNTIME_IMAGE: gcr.io/distroless/static-debian13:nonroot
 

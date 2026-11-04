@@ -43,9 +43,11 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--cohort', type=Path)
     parser.add_argument('--cg-limit-mib', type=int, default=32768)
-    parser.add_argument('--full-cosign', action='store_true', help='Build and execute the full cosign command tree')
+    parser.add_argument('--full-cosign', action='store_true', help='Build and execute the production WASM-only command tree')
     parser.add_argument('--dependency-proxy', help='Optional HTTPS CONNECT proxy for authenticated module downloads')
+    parser.add_argument('--native-toolchains', type=Path, required=True, help='JSON map of target to CC, CXX, PKG_CONFIG and WSEA_OPENSSL_SPEC (matching UWVM target recipe)')
     args = parser.parse_args()
+    native = json.loads(args.native_toolchains.read_text())
     root = args.workspace.resolve(strict=True)
     code_root = (args.cohort or root).resolve(strict=True)
     if os.uname().sysname != 'Linux' or not args.revision.isidentifier():
@@ -57,20 +59,22 @@ def main():
     out.mkdir(mode=0o700, exist_ok=False)
     source = root / ('wasm-cosign-full' if args.full_cosign else 'wasm-cosign')
     report = {'status': 'IN_PROGRESS', 'driver_sha256': sha(__file__), 'rows': [],
-              'scope': ('actual full static cosign binary and wasm secure command tree' if args.full_cosign
-                        else 'actual static secure Cobra command, not full cloud-provider cosign binary'),
+              'scope': ('actual static WASM-only product with shared UWVM native core' if args.full_cosign
+                        else 'focused static secure command with shared UWVM native core'),
               'unsupported_go_targets': ['armeb', 'aarch64_be'],
               'source_sha256': {str(p.relative_to(source)): sha(p)
-                  for directory in ['pkg/wasmsecure', 'cmd/cosign/cli/wasmsecure']
-                  for p in (source / directory).glob('*.go') if not p.name.endswith('_test.go')}}
+                  for directory in ['pkg/wasmsecure', 'cmd/cosign/cli/wasmsecure', 'internal/wseanative', 'internal/wasmcli']
+                  for p in (source / directory).glob('*') if p.is_file() and not p.name.endswith('_test.go')}}
     report['source_sha256']['test/wsea/cli_main.go'] = sha(source / 'test/wsea/cli_main.go')
+    report['source_sha256']['cmd/cosign/main.go'] = sha(source / 'cmd/cosign/main.go')
+    report['native_toolchains_sha256'] = sha(args.native_toolchains)
     index = out / 'report.json'
 
     def save():
         index.write_text(json.dumps(report, indent=2) + '\n')
 
     environment = dict(os.environ, GOENV='off', GOTOOLCHAIN='local', GOOS='linux',
-        GOMAXPROCS='2', GOMEMLIMIT='512MiB', CGO_ENABLED='0', GOPROXY='off',
+        GOMAXPROCS='2', GOMEMLIMIT='512MiB', CGO_ENABLED='1', GOPROXY='off',
         GOCACHE=str(root / 'go-cache'), GOMODCACHE=str(root / 'full-go-mod'),
         TMPDIR=str(root / 'tmp'), GOTMPDIR=str(root / 'tmp'))
     if args.dependency_proxy:
@@ -99,9 +103,19 @@ def main():
 
     try:
         for target in targets:
-            env = dict(environment, **PROFILES[target])
+            toolchain = native.get(target, {})
+            allowed = {'CC', 'CXX', 'PKG_CONFIG', 'WSEA_OPENSSL_SPEC', 'WSEA_OPENSSL_JOBS', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_CXXFLAGS', 'CGO_LDFLAGS'}
+            if not {'CC','CXX','PKG_CONFIG','WSEA_OPENSSL_SPEC'} <= toolchain.keys() or not toolchain.keys() <= allowed or not all(isinstance(v, str) and v for v in toolchain.values()):
+                raise ValueError('explicit target native/static crypto toolchain required: ' + target)
+            env = dict(environment, **PROFILES[target], **toolchain)
+            crypto = out / ('openssl-' + target)
+            env.update(GOEXE=go, WSEA_OPENSSL_ROOT=str(crypto), PKG_CONFIG_PATH=str(crypto / 'pkgconfig'),
+                       PKG_CONFIG_LIBDIR=str(crypto / 'pkgconfig'), PKG_CONFIG_SYSROOT_DIR='')
+            stage('core-check-' + target, ['python3', source / 'scripts/check_wsea_build.py', '--uwvm-root', code_root / 'source'], source, env, 90)
+            stage('build-openssl-' + target, ['python3', source / 'scripts/prepare_wsea_openssl.py'], source, env, 1800)
+            env['CGO_CPPFLAGS'] = env.get('CGO_CPPFLAGS', '') + ' ' + (crypto / 'cgo-cppflags').read_text().strip()
             binary = out / (('cosign-' if args.full_cosign else 'wsea-') + target)
-            stage('build-' + target, [go, 'build', '-p=1', '-trimpath', '-ldflags=-s -w',
+            stage('build-' + target, [go, 'build', '-p=1', '-trimpath', '-tags=netgo,osusergo,wsea_static', '-ldflags=-s -w -linkmode external -extldflags=-static',
                   '-o', binary, './cmd/cosign' if args.full_cosign else './test/wsea/cli_main.go'], source, env, 900)
             deadline = time.monotonic() + 21600
             chosen = None

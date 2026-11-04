@@ -18,9 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sigstore/cosign/v3/cmd/cosign/cli"
-	"github.com/sigstore/cosign/v3/cmd/cosign/cli/templates"
-	errors "github.com/sigstore/cosign/v3/cmd/cosign/errors"
+	"github.com/sigstore/cosign/v3/internal/wasmcli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
@@ -33,17 +31,22 @@ func main() {
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			err := errors.GenerateExitCodeDocs(dir)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return err
 			}
-			return doc.GenMarkdownTree(cli.New(), dir)
+			product := wasmcli.New()
+			var stable func(*cobra.Command)
+			stable = func(c *cobra.Command) {
+				c.DisableAutoGenTag = true
+				for _, child := range c.Commands() {
+					stable(child)
+				}
+			}
+			stable(product)
+			return doc.GenMarkdownTree(product, dir)
 		},
 	}
-	root.Flags().StringVarP(&dir, "dir", "d", "doc", "Path to directory in which to generate docs")
-
-	templates.SetCustomUsageFunc(root)
+	root.Flags().StringVarP(&dir, "dir", "d", "doc/wsea-cli", "Path to directory in which to generate docs")
 
 	if err := root.Execute(); err != nil {
 		fmt.Println(err)

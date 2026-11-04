@@ -733,7 +733,9 @@ func TestWholeCertificateProfilePrecedesRevocation(t *testing.T) {
 	}
 	f.ev.Certificates = append(certificatePEM(leafDER), certificatePEM(interDER)...)
 	f.ev.CRLs = append(pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: revokedDER}), f.ev.CRLs...)
-	if _, e = Verify(f.module, f.ev, f.p, f.root, f.now); e == nil || !strings.HasPrefix(e.Error(), "SIG_005:") {
+	// The shared native path can reject the certificate encoding before its
+	// strength check. Both must precede an authenticated revocation decision.
+	if _, e = Verify(f.module, f.ev, f.p, f.root, f.now); e == nil || (!strings.HasPrefix(e.Error(), "SIG_005:") && !strings.HasPrefix(e.Error(), "CERT_002:")) {
 		t.Fatalf("disallowed CA profile did not precede revoked CRL: %v", e)
 	}
 }

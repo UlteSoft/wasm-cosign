@@ -1,0 +1,49 @@
+name: WSEA release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Explicit release version (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  native-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - name: Build and execute native signature tests
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TARGET: ${{ matrix.target }}
+          WSEA_OPENSSL_JOBS: '3'
+        run: |
+          brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
+          python3 scripts/build_wsea_release.py --version "$RELEASE_VERSION" \
+            --target "$RELEASE_TARGET" --work "$RUNNER_TEMP/wsea-release" \
+            --output "$RUNNER_TEMP/release-assets"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 7

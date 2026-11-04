@@ -33,6 +33,7 @@ on:
 
 jobs:
   e2e-cross:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
@@ -56,6 +57,7 @@ jobs:
         run: go test -tags=e2e,cross -v ./test/...
 
   e2e-test-pkcs11:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -77,6 +79,7 @@ jobs:
         run: ./test/e2e_test_pkcs11.sh
 
   e2e-kms:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     runs-on: ubuntu-latest
     services:
       vault:
@@ -130,6 +133,7 @@ jobs:
         run: go test -tags=e2e,kms -v ./test/...
 
   e2e-registry:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     runs-on: ubuntu-latest
 
     env:

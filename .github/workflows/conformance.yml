@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   conformance:
+    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:

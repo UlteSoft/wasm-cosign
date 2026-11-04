@@ -1,18 +1,28 @@
 # Embedded WSEA v2 qualification
 
+The default product now uses the shared native UWVM core. Build with CGO and
+a matching bundled OpenSSL 3.5.9 toolchain; see [build requirements](../../doc/wsea-build.md).
+The cross-target driver now requires explicit `--native-toolchains`; there is no pure-Go fallback.
+Local `/tmp` qualification is also supported when explicitly authorized.
+
 Run candidate builds and tests only inside the authorized SSH Linux cgroup,
 with bounded process ownership, memory, temporary storage and execution time.
 
 ```sh
+make bundled-openssl
+export PKG_CONFIG_PATH="$PWD/.wsea-build/openssl/pkgconfig"
+export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+export PKG_CONFIG_SYSROOT_DIR=
+export CGO_CPPFLAGS="$(cat .wsea-build/openssl/cgo-cppflags)"
 go test ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 go test ./pkg/wasmsecure -run=^$ -fuzz=FuzzEmbeddedSectionParser -fuzztime=30s -parallel=1
 go build -o /private/build/cosign ./cmd/cosign
 /private/build/cosign wasm secure --help
 ```
 
-The full CLI registers the production command as `cosign wasm secure`. The
+The WASM-only product registers the production command as `cosign wasm secure`. The
 small `cli_main.go` entry point invokes the same Cobra command directly and is
-also used for static Go target qualification without unrelated cloud providers.
+also available for focused command tests with the same native backend.
 Reports distinguish that executable from the complete cosign executable.
 
 The current sign/verify/fetch commands consume one WASM with a final

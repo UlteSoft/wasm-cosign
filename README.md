@@ -1,3 +1,19 @@
+# wasm-cosign (WSEA)
+
+This fork builds a WASM-only signing tool interoperable with UWVM's WSEA v2
+execution verifier. Use `cosign wasm secure`; generic Sigstore-WASM, container,
+OCI and arbitrary-blob commands are excluded from the production binary.
+HTTPS/TLS, certificate chains, CRLs and protected policy management are retained.
+OpenSSL 3.5.9 source is retained in `third_party/openssl`; `make` builds the same
+pinned static crypto recipe as UWVM instead of selecting a system OpenSSL.
+
+See [WSEA build and shared-verifier requirements](doc/wsea-build.md).
+See [release packaging and platform qualification](doc/wsea-release.md).
+The upstream documentation below is historical and does not describe this
+fork's default command surface.
+
+---
+
 <p align="center">
   <img style="max-width: 100%;width: 300px;" src="https://raw.githubusercontent.com/sigstore/community/main/artwork/cosign/horizontal/color/sigstore_cosign-horizontal-color.svg" alt="Cosign logo"/>
 </p>

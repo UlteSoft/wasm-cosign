@@ -259,6 +259,9 @@ func verifyEmbedded(module []byte, p Policy, roots []byte, now time.Time, quorum
 		} else if !bytes.Equal(firstPayload, payload) {
 			return zero, errors.New("SIG_002: signatures authenticate different manifests")
 		}
+		if m.validUntil < first.validUntil {
+			first.validUntil = m.validUntil
+		}
 		pin := m.SignerSPKIs[0]
 		if !seen[pin] {
 			first.SignerSPKIs = append(first.SignerSPKIs, pin)

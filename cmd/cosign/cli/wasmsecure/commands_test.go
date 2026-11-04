@@ -87,6 +87,30 @@ func TestSecureCLIEndToEnd(t *testing.T) {
 	if _, e = run("policy-init", "--output", policy, "--trust-root", root, "--state-dir", state, "--certificate", cert, "--module-id", "test.module"); e != nil {
 		t.Fatal(e)
 	}
+	// A locally installed root does not exempt its self-signature. Rejection
+	// must occur before replacing the module or emitting VERIFIED.
+	unsigned, err := os.ReadFile(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := append([]byte(nil), caDER...)
+	broken[len(broken)-1] ^= 1
+	write("root.pem", "CERTIFICATE", broken)
+	for _, partial := range []bool{false, true} {
+		args := []string{"sign", module, "--policy", policy, "--key", keyPath, "--certificate", cert, "--crl", crlPath, "--module-id", "test.module", "--module-version", "1", "--not-before", now.Add(-time.Minute).UTC().Format(time.RFC3339), "--not-after", now.Add(time.Hour).UTC().Format(time.RFC3339)}
+		if partial {
+			args = append(args, "--allow-partial")
+		}
+		out, err := run(args...)
+		if err == nil || !strings.Contains(err.Error(), "CERT_002") || strings.Contains(out, `"status":"VERIFIED"`) || strings.Contains(out, `"status":"SIGNED_PARTIAL"`) {
+			t.Fatalf("invalid root was published: %s %v", out, err)
+		}
+		after, err := os.ReadFile(module)
+		if err != nil || !bytes.Equal(unsigned, after) {
+			t.Fatal("failed signing changed module", err)
+		}
+	}
+	write("root.pem", "CERTIFICATE", caDER)
 	if _, e = run("sign", module, "--policy", policy, "--key", keyPath, "--certificate", cert, "--crl", crlPath, "--module-id", "test.module", "--module-version", "1", "--not-before", now.Add(-time.Minute).UTC().Format(time.RFC3339), "--not-after", now.Add(time.Hour).UTC().Format(time.RFC3339)); e != nil {
 		t.Fatal(e)
 	}

@@ -21,6 +21,7 @@ steps:
     args:
       - "clone"
       - "https://github.com/${_TOOL_ORG}/${_TOOL_REPO}"
+      - "cosign"
 
   - name: gcr.io/cloud-builders/git
     entrypoint: "bash"
@@ -43,6 +44,21 @@ steps:
       - "https://token.actions.githubusercontent.com"
       - '--certificate-identity'
       - "https://github.com/gythialy/golang-cross/.github/workflows/builder.yml@refs/tags/v1.27.1-1"
+  # The distribution signer is a separate pinned upstream executable; it is
+  # never linked into the WASM product or rebuilt from this restricted fork.
+  - name: gcr.io/cloud-builders/docker
+    args: ['create', '--name', 'wsea-release-signer', 'ghcr.io/sigstore/cosign/cosign:v3.1.3-dev@sha256:3b1a2e2742351ab440255626f079a337e6c263249644800a52f5eaa389a5b730']
+  - name: gcr.io/cloud-builders/docker
+    args: ['cp', 'wsea-release-signer:/ko-app/cosign', '/workspace/release-cosign']
+  - name: gcr.io/cloud-builders/docker
+    args: ['rm', 'wsea-release-signer']
+  - name: gcr.io/cloud-builders/git
+    dir: "go/src/sigstore"
+    args: ['clone', '--no-checkout', 'https://github.com/UlteSoft/uwvm2-ros', 'uwvm2-ros']
+  - name: gcr.io/cloud-builders/git
+    dir: "go/src/sigstore/uwvm2-ros"
+    args: ['checkout', '--detach', '${_UWVM_REVISION}']
+
   # maybe we can build our own image and use that to be more in a safe side
   - name: ghcr.io/gythialy/golang-cross:v1.27.1-1@sha256:b288b491c96203db38192b24e25f5769e8e2a6618ebaa44ec0e269e74a94447d
     entrypoint: /bin/sh
@@ -50,6 +66,8 @@ steps:
     env:
       - "GOPATH=/workspace/go"
       - "GOBIN=/workspace/bin"
+      - "UWVM2_ROOT=/workspace/go/src/sigstore/uwvm2-ros"
+      - "COSIGN_RELEASE_SIGNER=/workspace/release-cosign"
       - PROJECT_ID=${PROJECT_ID}
       - KEY_LOCATION=${_KEY_LOCATION}
       - KEY_RING=${_KEY_RING}
@@ -73,6 +91,8 @@ steps:
     env:
       - "GOPATH=/workspace/go"
       - "GOBIN=/workspace/bin"
+      - "UWVM2_ROOT=/workspace/go/src/sigstore/uwvm2-ros"
+      - "COSIGN_RELEASE_SIGNER=/workspace/release-cosign"
       - "DOCKER_CONFIG=/workspace/.docker"
       - PROJECT_ID=${PROJECT_ID}
       - KEY_LOCATION=${_KEY_LOCATION}
@@ -154,6 +174,7 @@ tags:
 
 substitutions:
   _GIT_TAG: 'v1.23.45'
+  _UWVM_REVISION: 'main'
   _TOOL_ORG: 'honk'
   _TOOL_REPO: 'honk-repo'
   _STORAGE_LOCATION: 'honk'

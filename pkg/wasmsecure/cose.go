@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 
-// Package wasmsecure implements the deliberately restricted UWVM WSEA v1
-// detached COSE profile. It never retrieves trust anchors from a module bundle.
+// Package wasmsecure implements the UWVM WSEA v2 embedded WASM profile.
+// It never retrieves trust anchors from a module bundle.
 package wasmsecure
 
 import (
@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	Schema                   = "uwvm-wsea-v1"
+	Schema                   = "uwvm-wsea-v2"
 	EmbeddedSchema           = "uwvm-wsea-v2"
 	KnownCapabilities uint64 = 63
 	MaxSignatureBytes        = 65536
@@ -41,6 +41,9 @@ type Manifest struct {
 	Capabilities        uint64      `json:"capabilities"`
 	SignerSPKIs         []string    `json:"signer_spkis,omitempty"`
 	SignatureAlgorithms []Algorithm `json:"signature_algorithms,omitempty"`
+	// Authenticated minimum of manifest, certificate and CRL validity bounds.
+	// This is verifier output only, never part of the signed wire format.
+	validUntil uint64
 }
 
 func validID(id string) bool {
@@ -56,7 +59,7 @@ func validID(id string) bool {
 }
 
 func (m Manifest) validate() error {
-	if !validID(m.ModuleID) || m.ABI != "uwvm2" || len(m.Digest) != 32 || m.Size < 8 || m.Version == 0 || m.NotAfter <= m.NotBefore || m.NotAfter > 1<<63-1 || m.Capabilities & ^KnownCapabilities != 0 {
+	if !m.Embedded || !validID(m.ModuleID) || m.ABI != "uwvm2" || len(m.Digest) != 32 || m.Size < 8 || m.Version == 0 || m.NotAfter <= m.NotBefore || m.NotAfter > 1<<63-1 || m.Capabilities & ^KnownCapabilities != 0 {
 		return errors.New("SIG_002: invalid WSEA manifest")
 	}
 	return nil
@@ -87,11 +90,7 @@ func appendText(b []byte, v string) []byte {
 }
 func (m Manifest) payload() []byte {
 	b := []byte{0x8a}
-	schema := Schema
-	if m.Embedded {
-		schema = EmbeddedSchema
-	}
-	b = appendText(b, schema)
+	b = appendText(b, EmbeddedSchema)
 	b = appendText(b, m.ModuleID)
 	for _, n := range []uint64{m.Version, m.Epoch, m.Size} {
 		b = appendHead(b, 0, n)
@@ -109,10 +108,15 @@ func signingBytes(payload []byte) []byte {
 
 // Sign authenticates every module byte using the exact algorithm in m.Algorithm.
 // Its zero value retains ES256. Supported concrete keys are ECDSA, Ed25519 and RSA.
+// Embedded must be true; the retired detached v1 profile is not supported.
+// module must be an unsigned WASM prefix; use SigningInput for explicit replacement.
 func Sign(module []byte, m Manifest, key any) ([]byte, error) {
 	p, ok := profile(m.Algorithm)
 	if !ok {
 		return nil, errors.New("SIG_005: unsupported signing algorithm")
+	}
+	if _, err := SigningInput(module, false); err != nil {
+		return nil, err
 	}
 	m.Size = uint64(len(module))
 	d := sha256.Sum256(module)
@@ -249,7 +253,7 @@ func Parse(bundle []byte) (Manifest, []byte, []byte, error) {
 		return bad(errors.New("expected manifest array(10)"))
 	}
 	schema, e := q.text()
-	if e != nil || (schema != Schema && schema != EmbeddedSchema) {
+	if e != nil || schema != EmbeddedSchema {
 		return bad(errors.New("unsupported schema"))
 	}
 	m.Embedded = schema == EmbeddedSchema

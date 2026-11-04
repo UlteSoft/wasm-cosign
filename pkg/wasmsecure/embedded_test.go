@@ -76,11 +76,7 @@ func TestEmbeddedSectionBoundaries(t *testing.T) {
 	}
 	mutate := bytes.Clone(good)
 	mutate[len(f.module)-1] ^= 1
-	legacySignature, e := Sign(f.module, f.m, f.key)
-	if e != nil {
-		t.Fatal(e)
-	}
-	f.ev.Signature = legacySignature
+	f.ev.Signature = legacyCOSE(t, f)
 	legacy, e := Embed(f.module, f.ev)
 	if e != nil {
 		t.Fatal(e)

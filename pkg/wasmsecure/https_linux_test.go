@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -109,9 +110,23 @@ func TestFetchHTTPSAuthenticatedTLS(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	// Go's -exec wrapper applies only to the first test process. Keep the TLS
+	// trust-store child on the actual cross target as well (without binfmt changes).
+	var executionPrefix []string
+	if value := os.Getenv("WSEA_TEST_EXEC_PREFIX"); value != "" {
+		if err := json.Unmarshal([]byte(value), &executionPrefix); err != nil {
+			t.Fatal(err)
+		}
+		for _, arg := range executionPrefix {
+			if arg == "" {
+				t.Fatal("empty target execution argument")
+			}
+		}
+	}
 	for _, tc := range []struct{ name, roots, mode string }{{"private-CA-trusted", caPath, "trusted"}, {"private-CA-untrusted", emptyCA, "untrusted"}} {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := exec.Command(executable, "-test.run=^TestFetchHTTPSChild$", "-test.v")
+			argv := append(append([]string{}, executionPrefix...), executable, "-test.run=^TestFetchHTTPSChild$", "-test.v")
+			cmd := exec.Command(argv[0], argv[1:]...)
 			env := []string{}
 			for _, v := range os.Environ() {
 				if strings.HasPrefix(v, "SSL_CERT_FILE=") || strings.HasPrefix(v, "SSL_CERT_DIR=") || strings.HasPrefix(v, "WSEA_HTTPS_TEST_") {

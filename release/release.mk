@@ -3,7 +3,7 @@
 ##################
 # used when releasing together with GCP CloudBuild
 .PHONY: release
-release:
+release: bundled-openssl
 	LDFLAGS="$(LDFLAGS)" goreleaser release --parallelism 1 --clean --timeout 120m
 
 ######################
@@ -17,5 +17,5 @@ sign-release-images: ko
 
 # used when need to validate the goreleaser
 .PHONY: snapshot
-snapshot:
+snapshot: bundled-openssl
 	LDFLAGS="$(LDFLAGS)" goreleaser release --skip=sign,publish --snapshot --clean --timeout 120m --parallelism 1

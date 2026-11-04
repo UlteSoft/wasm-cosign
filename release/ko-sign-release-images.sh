@@ -38,13 +38,13 @@ if [[ ! -f cosignDevImagerefs ]]; then
 fi
 
 echo "Signing cosign images with GCP KMS Key..."
-cosign sign --yes --key "gcpkms://projects/$PROJECT_ID/locations/$KEY_LOCATION/keyRings/$KEY_RING/cryptoKeys/$KEY_NAME/versions/$KEY_VERSION" -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignImagerefs)
+"${COSIGN_RELEASE_SIGNER:?set a separate upstream release signer}" sign --yes --key "gcpkms://projects/$PROJECT_ID/locations/$KEY_LOCATION/keyRings/$KEY_RING/cryptoKeys/$KEY_NAME/versions/$KEY_VERSION" -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignImagerefs)
 
 echo "Signing images with Keyless..."
-cosign sign --yes -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignImagerefs)
+"${COSIGN_RELEASE_SIGNER:?set a separate upstream release signer}" sign --yes -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignImagerefs)
 
 echo "Signing cosign images with GCP KMS Key..."
-cosign sign --yes --key "gcpkms://projects/$PROJECT_ID/locations/$KEY_LOCATION/keyRings/$KEY_RING/cryptoKeys/$KEY_NAME/versions/$KEY_VERSION" -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignDevImagerefs)
+"${COSIGN_RELEASE_SIGNER:?set a separate upstream release signer}" sign --yes --key "gcpkms://projects/$PROJECT_ID/locations/$KEY_LOCATION/keyRings/$KEY_RING/cryptoKeys/$KEY_NAME/versions/$KEY_VERSION" -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignDevImagerefs)
 
 echo "Signing images with Keyless..."
-cosign sign --yes -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignDevImagerefs)
+"${COSIGN_RELEASE_SIGNER:?set a separate upstream release signer}" sign --yes -a GIT_HASH="$GIT_HASH" -a GIT_VERSION="$GIT_VERSION" $(cat cosignDevImagerefs)

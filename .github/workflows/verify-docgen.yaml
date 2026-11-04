@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: deps
-        run: sudo apt-get update && sudo apt-get install -yq libpcsclite-dev
+        run: sudo apt-get update && sudo apt-get install -yq g++ pkg-config perl make python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
