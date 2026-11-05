@@ -9,6 +9,9 @@ pinned static crypto recipe as UWVM instead of selecting a system OpenSSL.
 
 See [WSEA build and shared-verifier requirements](doc/wsea-build.md).
 See [release packaging and platform qualification](doc/wsea-release.md).
+The legacy **`wasm-cosign` signature container is deprecated**. New signatures
+must use `uwvm.wsea.v2` through `cosign wasm secure`. This deprecation applies
+to the old custom-section format, not to the wasm-cosign tool or project name.
 The upstream documentation below is historical and does not describe this
 fork's default command surface.
 

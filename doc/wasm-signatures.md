@@ -1,14 +1,17 @@
-# WebAssembly Module Signing and Signature Management
+# Deprecated: wasm-cosign Signature Container
 
-For embedded WSEA signatures with local X.509/CRL enforcement in UWVM, see
-[UWVM WSEA secure execution](wasm-secure-execution.md) and `cosign wasm secure`.
-The embedded Sigstore workflow described below remains separate.
+> **Deprecated:** The `wasm-cosign` custom-section signature format and the
+> legacy commands described below are retained only as historical documentation.
+> They are excluded from the current production executable. Use
+> [`cosign wasm secure` with `uwvm.wsea.v2`](wasm-secure-execution.md) for new
+> signatures. UWVM's secure execution gate does not accept the old container.
+> Renaming a section does not convert its signatures; produce and verify a new
+> WSEA signature under the intended protected policy. The wasm-cosign tool and
+> project name are not deprecated.
 
-This document describes cosign's WebAssembly-specific signing commands and the
-embedded signature model used by `cosign wasm`. It is intended for users who
-need a complete module-level signing workflow, similar in spirit to the way PE
-files can carry signatures from one or more publishers while still remaining
-directly executable by the platform loader.
+This document records the historical WebAssembly-specific signing commands and
+embedded Sigstore signature model. The examples below describe that legacy
+implementation, not the current WSEA command surface.
 
 The generated command reference pages under `doc/cosign_wasm*.md` list flags and
 short examples. This document explains the signing format, multi-signature
@@ -35,9 +38,9 @@ The lower-level blob commands also support the same WebAssembly payload rules:
 | `cosign sign-blob --wasm --wasm-output <file> <module>` | Sign the canonical unsigned module and append the resulting bundle to the output module. |
 | `cosign verify-blob --wasm <module>` | Verify the canonical unsigned module using either embedded bundles or explicitly supplied verification material. |
 
-Use the `cosign wasm` command group for normal module signing workflows. Use
-`sign-blob --wasm` and `verify-blob --wasm` when integrating with existing blob
-signing automation.
+The commands above belong to the deprecated workflow. For current module
+signing and verification, use `cosign wasm secure sign` and
+`cosign wasm secure verify`.
 
 ## Embedded Signature Format
 

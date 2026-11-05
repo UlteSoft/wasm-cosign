@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package wasm handles the legacy wasm-cosign signature container.
+//
+// Deprecated: Use pkg/wasmsecure and the uwvm.wsea.v2 container for new signatures.
+// The legacy Sigstore container is not accepted by UWVM's secure execution gate
+// and cannot be converted to WSEA by renaming its custom section.
 package wasm
 
 import (
@@ -23,6 +28,9 @@ import (
 const (
 	// SignatureSectionName is the WebAssembly custom section name used to store
 	// embedded Sigstore verification material.
+	//
+	// Deprecated: Use wasmsecure.SectionName (uwvm.wsea.v2). The formats are not
+	// interchangeable; this constant retains the legacy name for historical data.
 	SignatureSectionName = "wasm-cosign"
 
 	customSectionID = byte(0)

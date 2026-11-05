@@ -3,8 +3,10 @@
 The default `./cmd/cosign` executable exposes `cosign wasm secure` and `version`.
 `sign`, `verify`, `fetch`, `policy-init` and `policy-update` use embedded WSEA v2,
 the same format accepted by UWVM. The thirteen algorithm profiles and existing
-multisignature wire format are unchanged. Generic Sigstore `wasm-cosign` custom
-sections, OCI/container operations and arbitrary blob commands are not exposed.
+multisignature wire format are unchanged. The legacy Sigstore `wasm-cosign`
+signature container is **deprecated**; use `uwvm.wsea.v2` for new signatures.
+Legacy container commands, OCI/container operations and arbitrary blob commands
+are not exposed.
 Historical upstream source remains in the checkout; it is outside the product
 import graph. `go test ./...` explicitly builds that historical source as well;
 use `make test` for the product.

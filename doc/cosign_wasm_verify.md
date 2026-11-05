@@ -1,5 +1,10 @@
 ## cosign wasm verify
 
+> **Deprecated:** This historical command uses the deprecated `wasm-cosign`
+> signature container and is excluded from the current production executable.
+> Use [`cosign wasm secure` with `uwvm.wsea.v2`](wasm-secure-execution.md).
+> See the [legacy format notice](wasm-signatures.md).
+
 Verify a WebAssembly module with embedded wasm-cosign signatures
 
 ```

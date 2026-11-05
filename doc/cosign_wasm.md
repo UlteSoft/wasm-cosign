@@ -1,5 +1,10 @@
 ## cosign wasm
 
+> **Historical reference:** The `wasm-cosign` signature container and the legacy
+> sign/verify/list/extract/strip commands below are **deprecated**. The current
+> executable exposes [`cosign wasm secure`](wsea-cli/cosign_wasm_secure.md),
+> which uses `uwvm.wsea.v2`. The tool name and the secure subgroup are not deprecated.
+
 Utilities for working with WebAssembly modules and embedded wasm-cosign signatures
 
 ### Options

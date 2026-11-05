@@ -1,5 +1,10 @@
 # Embedded WASM secure execution (WSEA v2)
 
+The legacy `wasm-cosign` signature container is **deprecated**. Use the
+`uwvm.wsea.v2` format described here for new signatures. These containers are
+not interchangeable, and changing a custom-section name does not convert a
+signature. The wasm-cosign tool and project name remain current.
+
 `cosign wasm secure` signs, verifies and downloads one WASM containing a final
 `uwvm.wsea.v2` custom section. The section holds canonical COSE_Sign1, a signing
 certificate chain and complete issuer CRLs. Trust roots, signer pins, algorithm

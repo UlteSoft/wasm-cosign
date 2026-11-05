@@ -36,6 +36,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Wasm constructs the historical command group. Its wasm-cosign signature
+// container and legacy sign/verify/list/extract/strip commands are deprecated.
+// The production entry point uses internal/wasmcli and exposes only the WSEA
+// secure subgroup; new signatures must use the uwvm.wsea.v2 container.
 func Wasm() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wasm",
