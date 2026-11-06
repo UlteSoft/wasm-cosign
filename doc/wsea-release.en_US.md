@@ -44,20 +44,38 @@ hosted runners. There is no fallback that changes crypto or skips failed tests.
 
 ## Automatic release targets
 
-The current automatic release builds these five archives from one source tag:
+The automatic release builds fifteen archives from one immutable source tag:
 
-- `x86_64-linux-gnu`: native static Linux executable, tested on Linux x86_64.
-- `aarch64-apple-darwin`: native macOS executable, tested on an ARM runner.
-- `x86_64-apple-darwin`: native macOS executable, tested on an Intel runner.
-- `wasm32-wasip1`: WASI Preview 1, with strict MVP modules.
-- `wasm32-js`: Node/browser SDK, with the identical crypto reactor.
+- Static GNU/Linux: `aarch64-linux-gnu`, `armv7-linux-gnueabihf`, `i686-linux-gnu`,
+  `loongarch64-linux-gnu`, `mips64-linux-gnu`, `mips64el-linux-gnu`,
+  `powerpc64le-linux-gnu`, `riscv64-linux-gnu`, `x86_64-linux-gnu`.
+- Static musl Linux: `x86_64-linux-musl`.
+- Native FreeBSD: `x86_64-freebsd15`, requiring FreeBSD 15.1 or newer.
+- Native macOS: `aarch64-apple-darwin` and `x86_64-apple-darwin`, requiring macOS 15+.
+- Portable SDK: `wasm32-wasip1` and `wasm32-js`, with the identical crypto reactor
+  and strict MVP modules. There is no WASIp2 build.
 
-Native macOS targets require macOS 15 or newer and statically link OpenSSL while
-using system C/C++ libraries. There is no WASIp2 build. Other previously published
-architectures remain available in earlier releases; this automated matrix does
-not claim to requalify them. Add a target only when its explicit toolchain and
-actual native/QEMU tests are wired into both build and publication validation.
-Never substitute an untested executable for a missing platform.
+The i686 build requires SSE2; ARMv7 uses the hard-float ABI; PowerPC64 LE targets
+POWER8 or newer; MIPS64 uses the n64 hardware-floating-point ABI. macOS and FreeBSD
+statically link the bundled OpenSSL and use their system C/C++ libraries.
+
+`wsea-cross-assets.yml` runs nine Linux configurations through actual QEMU 10.2+
+and builds/tests FreeBSD inside a disposable QEMU guest. The FreeBSD VM has 4 GiB
+RAM and two CPUs and inherits the host's 64 GiB zero-swap cgroup. Its official
+15.1 image and Go 1.26.8 archive are pinned by SHA-256. Guest dependencies are
+installed only inside its disposable overlay. The guest build uses an unprivileged
+account and SSH binds to host loopback. No persistent VM or persistent self-hosted
+runner is required.
+
+Linux compiler/sysroot packages are SHA-256-pinned in
+`scripts/wsea_cross_toolchains.json`. Debian/Ubuntu packages are extracted into
+private directories without installing them on the host. The musl SDK retains
+its unsafe-host-path guard; a private copy of the same Go tree avoids host `/usr`
+include paths. The shared OpenSSL assembly/algorithm configuration is unchanged.
+Each target executes the full product tests, including signatures, certificate
+admission, mixed-key multisignatures, protected state and CLI boundaries, before
+an archive is created. The extracted executable is also checked through its
+actual target runner. Windows, DOS and other unqualified ABIs are not substituted.
 
 ## Publish a new tag
 
@@ -79,16 +97,33 @@ git push origin v0.2.1
 Use the next unused version instead of reusing this example. Pushing the tag
 starts **WSEA release** (`cut-release.yml`). Admission requires a semantic tag
 on `main` history. The workflow calls native unit/race and generated-help checks, bilingual/workflow
-checks, the native three-target builder and portable qualification. For portable releases, tests execute the exact
+checks, the native three-target builder, ten QEMU targets and portable qualification. For portable releases, tests execute the exact
 bytes extracted from the packaged archives, not just an earlier build tree.
 
 Only after all required jobs succeed does the isolated publication job receive
 `contents: write`. It downloads production archives from that same run, validates
-the complete five-target set, every file allowlist/digest, source/counterpart
+the complete fifteen-target set, every file allowlist/digest, source/counterpart
 revisions and bilingual docs, and generates `SHA256SUMS`. It creates a draft,
 uploads the verified files and publishes the release. It does not execute
 artifact binaries in the token-bearing publication job or overwrite an existing
 release. No extra cloud credential, OIDC signing service or registry is required.
+
+## Completing an existing release
+
+An explicitly authorized platform supplement must use the existing tag's exact
+product commit and its pinned UWVM counterpart. Do not move the tag or rebuild
+from a newer branch under the old version. The QEMU workflow can be dispatched
+from the current workflow branch with the older `version` input: it checks out
+that product tag separately from the current orchestration scripts.
+
+Qualify each missing target, retain the original executable archives, and
+validate the combined fifteen-target set with `validate_wsea_release.py` using
+`--source-root` for the clean original checkout. Add only the missing archives;
+update the aggregate `SHA256SUMS` and bilingual release notes after checking that
+all existing archive hashes are unchanged. Download the final attachments and
+verify them again. This supplement updates assets and notes, not the immutable
+tag's source documents or historical workflow. Future tags use the expanded
+matrix in the current branch. Never publish a failed or unexecuted target.
 
 ## Archive contract and provenance
 

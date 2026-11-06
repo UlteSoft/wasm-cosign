@@ -60,8 +60,13 @@ jobs:
     uses: ./.github/workflows/wsea-release-assets.yml
     with:
       version: ${{ needs.admission.outputs.version }}
+  cross:
+    needs: admission
+    uses: ./.github/workflows/wsea-cross-assets.yml
+    with:
+      version: ${{ needs.admission.outputs.version }}
   publish:
-    needs: [admission, checks, documents, lint, wasm, native]
+    needs: [admission, checks, documents, lint, wasm, native, cross]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

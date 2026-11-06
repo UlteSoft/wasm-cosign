@@ -33,18 +33,31 @@ swap 为零、限制 CPU／进程数并设置任务超时；内存压力时还�
 
 ## 自动发行目标
 
-当前自动发布从同一源码标签构建五个归档：
+自动发布从同一不可变源码标签构建十五个归档：
 
-- `x86_64-linux-gnu`：原生静态 Linux 程序，在 Linux x86_64 测试。
-- `aarch64-apple-darwin`：原生 macOS 程序，在 ARM runner 测试。
-- `x86_64-apple-darwin`：原生 macOS 程序，在 Intel runner 测试。
-- `wasm32-wasip1`：WASI Preview 1，严格 MVP 模块。
-- `wasm32-js`：Node／浏览器 SDK，共用完全相同的密码学 reactor。
+- 静态 GNU/Linux：`aarch64-linux-gnu`、`armv7-linux-gnueabihf`、`i686-linux-gnu`、
+  `loongarch64-linux-gnu`、`mips64-linux-gnu`、`mips64el-linux-gnu`、
+  `powerpc64le-linux-gnu`、`riscv64-linux-gnu`、`x86_64-linux-gnu`。
+- 静态 musl Linux：`x86_64-linux-musl`。
+- 原生 FreeBSD：`x86_64-freebsd15`，要求 FreeBSD 15.1 或更新版本。
+- 原生 macOS：`aarch64-apple-darwin`、`x86_64-apple-darwin`，要求 macOS 15+。
+- 可移植 SDK：`wasm32-wasip1`、`wasm32-js`，使用同一密码学 reactor，严格限制为 MVP。
+  不提供 WASIp2 构建。
 
-原生 macOS 要求 macOS 15 或更高，静态链接 OpenSSL，使用系统 C／C++ 库。
-不构建 WASIp2。其他此前已发布架构仍可在旧版本下载；此自动矩阵不宣称重新验证了它们。
-新增平台必须把明确工具链及实际原生／QEMU 测试同时接入构建与发布验证。
-不能用未测试程序补齐缺失平台。
+i686 要求 SSE2；ARMv7 使用 hard-float ABI；PowerPC64 LE 要求 POWER8 或更新处理器；
+MIPS64 使用 n64 硬件浮点 ABI。macOS 与 FreeBSD 静态链接内置 OpenSSL，同时使用系统 C/C++ 库。
+
+`wsea-cross-assets.yml` 使用实际 QEMU 10.2+ 执行九种 Linux 配置，并在一次性 QEMU 客体中
+构建、测试 FreeBSD。FreeBSD 虚拟机使用 4 GiB 内存、两个 CPU，继承宿主的 64 GiB、零 swap
+cgroup。官方 15.1 镜像与 Go 1.26.8 归档均固定 SHA-256，客体依赖仅安装到一次性磁盘叠加层。
+客体构建使用普通用户，SSH 仅绑定宿主回环地址；不需要持久虚拟机或持久自托管 runner。
+
+Linux 编译器和 sysroot 软件包的 SHA-256 固定在 `scripts/wsea_cross_toolchains.json`。
+Debian／Ubuntu 软件包只解压到私有目录，不安装到宿主系统。musl SDK 保留不安全宿主路径检查；
+通过在私有目录复制相同的 Go 工具链，避免使用宿主 `/usr` 下的包含路径。
+共享 OpenSSL 的汇编与算法配置保持不变。每个目标必须先执行完整产品测试，覆盖签名、证书准入、
+混合密钥多签、受保护状态和命令行边界，才能创建归档；解包后的可执行文件还会通过实际目标运行器检查。
+不以 Windows、DOS 或其他未验证 ABI 的文件冒充受支持平台。
 
 ## 发布新标签
 
@@ -63,14 +76,26 @@ git push origin v0.2.1
 
 实际使用下一个未占用版本，不能重复使用示例标签。
 推送标签启动 **WSEA release**（`cut-release.yml`），准入要求语义版本标签位于 `main` 历史中。
-工作流调用原生单元／race 与生成帮助检查、双语／工作流检查、三个原生目标构建器和可移植验证流程。
+工作流调用原生单元／race 与生成帮助检查、双语／工作流检查、三个原生目标构建器、十个 QEMU 目标和可移植验证流程。
 可移植发行测试执行的是已打包归档解压后的准确字节，而不仅是更早构建目录的文件。
 
 全部必要任务成功后，隔离的发布任务才获得 `contents: write`。
-它下载本次运行的生产归档，检查完整五目标集合、每个文件白名单／摘要、源码／配套提交及双语文档，
+它下载本次运行的生产归档，检查完整十五目标集合、每个文件白名单／摘要、源码／配套提交及双语文档，
 生成 `SHA256SUMS`，然后创建草稿、上传已验证文件并公开发行。
 持有写 token 的发布任务不执行附件二进制，也不会覆盖已有发行版。
 无需额外云凭据、OIDC 签名服务或容器仓库。
+
+## 补齐已有发行版
+
+明确获准补充平台时，必须使用现有标签对应的原始产品提交及其固定的 UWVM 提交。
+不得移动标签，也不能从较新分支构建后冒用旧版本号。可以从当前工作流分支手动触发 QEMU 工作流，
+将较旧版本传入 `version`：流程会单独检出该产品标签，将待发布源码与当前构建调度脚本分开。
+
+逐个验证缺少的目标，保留原有可执行文件归档；合并全部十五个目标后，使用 `validate_wsea_release.py`
+校验，并通过 `--source-root` 指向干净的原始源码检出目录。只追加缺少的归档；确认原有归档摘要不变后，
+更新汇总的 `SHA256SUMS` 和中英文发行说明，再下载最终附件进行复核。
+这种补充只更新附件和发行说明，不修改不可变标签内的源码文档及历史工作流；后续标签使用当前分支
+扩展后的完整矩阵。不得发布测试失败或没有实际执行过的目标。
 
 ## 归档约定与来源
 

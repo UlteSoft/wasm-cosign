@@ -1,0 +1,7 @@
+# GitHub's hosted Ubuntu 26.04 image is available, but actionlint 1.7.12's
+# built-in label inventory predates it. This extends validation for that label;
+# the workflow still selects GitHub-hosted runners, not self-hosted machines.
+# https://github.com/actions/runner-images#available-images
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

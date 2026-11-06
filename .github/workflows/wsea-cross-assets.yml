@@ -1,0 +1,138 @@
+name: WSEA QEMU release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing immutable semantic release tag
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: QEMU ${{ matrix.target }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-linux-gnu, armv7-linux-gnueabihf, i686-linux-gnu,
+                 loongarch64-linux-gnu, mips64-linux-gnu, mips64el-linux-gnu,
+                 powerpc64le-linux-gnu, riscv64-linux-gnu, x86_64-linux-musl]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.version }}
+          path: .tmp/release-source
+          persist-credentials: false
+      - name: Pin the release counterpart
+        run: |
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          revision = pathlib.Path('.tmp/release-source/scripts/wsea_uwvm_revision.txt').read_text().strip()
+          assert re.fullmatch('[a-f0-9]{40}', revision)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('UWVM_REVISION=' + revision + '\n')
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: UlteSoft/uwvm2-ros
+          ref: ${{ env.UWVM_REVISION }}
+          path: .tmp/uwvm
+          persist-credentials: false
+          sparse-checkout: |
+            src/uwvm2/utils/security
+            third-parties/openssl
+            tools/dependencies
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - name: Host tools and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user pkg-config perl make python3 g++
+      - name: Build and execute all target product tests
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          sudo systemd-run --unit="wsea-cross-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
+            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property=TasksMax=512 --property=CPUQuota=200% \
+            /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/ci_wsea_cross.py --version "$RELEASE_VERSION" --target "$RELEASE_TARGET" \
+              --source-root .tmp/release-source --uwvm-root .tmp/uwvm \
+              --work .tmp/release-source/.tmp/cross
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wsea-native-${{ matrix.target }}
+          path: .tmp/release-source/.tmp/cross/assets/*.tar.xz
+          if-no-files-found: error
+          retention-days: 7
+
+  freebsd:
+    name: QEMU x86_64-freebsd15
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.version }}
+          path: .tmp/release-source
+          persist-credentials: false
+      - name: Pin the release counterpart
+        run: |
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          revision = pathlib.Path('.tmp/release-source/scripts/wsea_uwvm_revision.txt').read_text().strip()
+          assert re.fullmatch('[a-f0-9]{40}', revision)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('UWVM_REVISION=' + revision + '\n')
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: UlteSoft/uwvm2-ros
+          ref: ${{ env.UWVM_REVISION }}
+          path: .tmp/uwvm
+          persist-credentials: false
+          sparse-checkout: |
+            src/uwvm2/utils/security
+            third-parties/openssl
+            tools/dependencies
+      - name: QEMU virtual machine prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage python3 openssh-client
+      - name: Build and execute inside FreeBSD
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          sudo systemd-run --unit="wsea-freebsd-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
+            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property=TasksMax=512 --property=CPUQuota=200% \
+            /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/ci_wsea_freebsd.py --version "$RELEASE_VERSION" \
+              --source-root .tmp/release-source --uwvm-root .tmp/uwvm --work .tmp/freebsd
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wsea-native-x86_64-freebsd15
+          path: .tmp/freebsd/assets/*.tar.xz
+          if-no-files-found: error
+          retention-days: 7

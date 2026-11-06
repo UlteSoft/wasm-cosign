@@ -1,0 +1,904 @@
+{
+  "aarch64-linux-gnu": {
+    "kind": "deb",
+    "arch": "aarch64",
+    "triple": "aarch64-linux-gnu",
+    "qemu": "qemu-aarch64",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-aarch64-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-aarch64-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "2ae4051f435110b2bd8a1d168205808b53b6209bdb12192755cbba153498e3e0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/cpp-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "cpp-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "6d46985f5bae862626ad607db4ed3523246dab31875612446001809a206b9086"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/cpp-aarch64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "cpp-aarch64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "77d2d109a640258220c4326308e98be6d052385ec72de0a346bf829c2bdee4ad"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-aarch64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-aarch64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "sha256": "41a2c2434b9834070e9b35dd2e5a4255be03d4bd87ad7b4bd582b788d7344303"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-arm64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-arm64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "43dc16e207bfc1423088240c8ce7b6387acc48a21057b998d8f7bb95dca20253"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgcc-s1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "3e274aeaf7e731520de6cfe1fae0b9c2b16f382e037892cd3f99f993d20cc903"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgomp1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "0288a871d14d18df2186946848a8400afde63b8340124bb99f27d2bce9aa58ee"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libitm1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libitm1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "beb2f43f81094c0aae703bafd9785efea591c47e0bcd03e993524e6bf8849b17"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libatomic1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "ad15d1a36b416a0c587dde02d675ba24d0d8bfec7af929262ed469920689e371"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libasan8-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "5cb67c28735a9b8035bf3c3d111a4b92425b0692e1e6ae0098998b8e875fa7ee"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/liblsan0-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "liblsan0-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "df179370d2429a0619dedc1a198b4bd44401712d4b35ef5e40ea92ba45bb7c44"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libtsan2-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libtsan2-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "28bbed17e7fe690971d2cab8669a43455562b01ec1250cdbb5ad9ed6053199c3"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libstdc%2b%2b6-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "8ac715b2727a65ad55e6ffb282e3b44152ed5414fcaf93d314281db2b6091bc3"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libubsan1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "2ad4145f3251dc9fe35d6fc5afbbf0bb7256e34c2460b154905036c96776eaf0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libhwasan0-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libhwasan0-arm64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "123e633fe481d564bf6f9c592cfafc67e84edfe62c8477cefd86ce0995a5f5a0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libgcc-15-dev-arm64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libgcc-15-dev-arm64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "b5064dd69c4ca98f319084186530265f0cfbf4b97dabcebab2bb003928562dbf"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "72bec95928dcd2a954ec9f5aa4a35fad9b43a0798e1dc2d515f9c864c9908d89"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/linux-libc-dev-arm64-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-arm64-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "3752af8900d16be48d042b232b0dac75e47411305ecb486b544ac77eb8759ac4"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-dev-arm64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-arm64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "5057ab46f4bf3f4e2aa9f84745f903c26301c541fcce1704bc511aa4aadf7a1a"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libstdc%2b%2b-15-dev-arm64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libstdc++-15-dev-arm64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "a88bc813f2bb86ca21b57018c405510bd3cc3d93202ae16d44561b619e16d66d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/g%2b%2b-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "g++-15-aarch64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "988221ff508e6150282f535b404ebeeb2601875daf1acf5814bc66d3ff66e10e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/gcc-aarch64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "gcc-aarch64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "823c4850d4f804e2606f7b4413e0c1e89bfc6966b3066497ffcd18ee97c1f20f"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/g%2b%2b-aarch64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "g++-aarch64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "0cc005368957bd4cffd84c4415d450e5d5acc9f7a9b2662bd7ec8e8172ce6b15"
+      }
+    ]
+  },
+  "armv7-linux-gnueabihf": {
+    "kind": "deb",
+    "arch": "armhf",
+    "triple": "arm-linux-gnueabihf",
+    "qemu": "qemu-arm",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-arm-linux-gnueabihf-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-arm-linux-gnueabihf-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "2cff1c4dfcd0234a5ab4b0db1c81df4070f220cbefe1278a8160e4ec2da8d3bd"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/cpp-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "cpp-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "46d663b3ff4888d2e53994dacc66d4b8ed06eacf6e1491bcdc4e0f08fd20c0b8"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/cpp-arm-linux-gnueabihf_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "cpp-arm-linux-gnueabihf_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "fba23c69670b35ebf65dc982c05d733881bac66c9f2ab844074f057355a221b2"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-arm-linux-gnueabihf_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-arm-linux-gnueabihf_2.46-3ubuntu2_amd64.deb",
+        "sha256": "929c3f39b2a50018ff177c02df4ba730f5516a17a92bf1ed5ee02c5895445768"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-armhf-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-armhf-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "9025e2fe97988e27606e3e44b68e0f73d4c569bf2a99d97b00211f833cc9fcbc"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgcc-s1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "2706eecec31000b152dad5069490c5d01caad315f3d2ec05c100e06f7968c09d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgomp1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "a26477e8500a9dc92c38f186283f1b475d61fabfe2bb17c800ac066740025e10"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libatomic1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "b9ade21823076f86e94bc8f05909d05388dd2041723cc2fbf719d01e98ed640a"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libasan8-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "644b7042eb7eef0eef1c29dcbaddf2792c05e04883e94d7d81d0ffcdd906fc00"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libstdc%2b%2b6-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "23e550073b91214769061fa6fff453e7cb228df2638c47a41cfb0b10f383ab83"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libubsan1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-armhf-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "b0ad7c49650156bb4b12b998b6ccc87f6d764a1d6d4d2d08f57c7fb68d646d62"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libgcc-15-dev-armhf-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libgcc-15-dev-armhf-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "4070310a3b595c9cf905d68f37f755754f0509367ab3c4ed973c8a7ebea22f1e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "3077a8c6ca15ff2fd3307be7bfda852d1b6965993e8073d2cd01d6f0292f3fad"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/linux-libc-dev-armhf-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-armhf-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "4bb9ed0d9c43fac4534310ec4deaaad61b97ef45832bda275a9c33e42bb3c320"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-dev-armhf-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-armhf-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "5c90d3589775f2f3fc2a28295e86a25e6c9bffe793463c262dd4486bef16ca7c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libstdc%2b%2b-15-dev-armhf-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libstdc++-15-dev-armhf-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "60346586afd07148e6e6036c43f9ef80e25b3779f5eaf9f126be478eaee0430f"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/g%2b%2b-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "g++-15-arm-linux-gnueabihf_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "876dbf66ba13476cbe360a29a89a98c74ad714e7638a96e4019ced7355190df6"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/gcc-arm-linux-gnueabihf_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "gcc-arm-linux-gnueabihf_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "9f046cc9c160b7ae588fbfa5700433c77eecb947e77f24f624dada4ff8efc1fa"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/g%2b%2b-arm-linux-gnueabihf_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "g++-arm-linux-gnueabihf_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "e510c228b67f2890062d3b59648a73d40e29a2209d65099cc46e56259e9258f9"
+      }
+    ]
+  },
+  "i686-linux-gnu": {
+    "kind": "deb",
+    "arch": "i686",
+    "triple": "i686-linux-gnu",
+    "qemu": "qemu-i386",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross/gcc-15-i686-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-i686-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "a8a1d4368cbfaa4030156cb82220dd49828bc1e231b36709a928334eaca59890"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/cpp-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "cpp-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "4a1c0d479337b1d9342e988d2ddaedd8b09d6fb67afe0b9a62af4e85af8f4099"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/cpp-i686-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "cpp-i686-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "826c3d6eded9a4f53ce8df5ef02b7e1404e51ca57881774314bb44dbe2e4f5b3"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-i686-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-i686-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "sha256": "75217b6a9bfd50d82cb061182a5dc3a6eab40aa8cd9865ea93324b2086ed90db"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-i386-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-i386-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "bef6abbc3ffaa6822d459ba0d54f75a23a1cf4126409b93eff17d1402a8e1895"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgcc-s1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "c281711421a506216e8c1e024e0a795d0ed1812efc84125fb96d630098e7baa1"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgomp1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "5f89ee15b75f8cd547f60dde1eff7fcb45f3363f039f89068f62ecad6da6249c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libitm1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libitm1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "a0457bad3116360f33ad022487b9b71952551fda4d395ff4bb8f7811854353e2"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libatomic1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "7cc3c59334d8745594a416219afcf954b562c128531562013fdd2c71c1942c37"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libasan8-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "677e42db34cf7dde98aad9c61acefda4e9def6594fe907bd1b6fd7cf8294a5fb"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libstdc%2b%2b6-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "35ad2b99389f9b8cd7d449144940dc99857a65fab66b7f05f595e98ccaafcd01"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libubsan1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "280adbd2d6ac09166e15887fb5459af5fd5a9d489158162a94a2a8681e16806c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libquadmath0-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libquadmath0-i386-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "f095d86cb399dba4301d0d4675682a20dca23c12dba2af3b60eb1f57326d7793"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libgcc-15-dev-i386-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libgcc-15-dev-i386-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "ba0e1bc6f880c4bd000807881b7ff76227037112ea9acf9312890c80a4568200"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "51588c55bd9f4be00409d78b937668b1916bdb18d0c1883d92cfd7d96bfa5851"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/linux-libc-dev-i386-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-i386-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "422137bce2a8de36a6cb2b0d9566fb1bb9dbb1337783bd1bc40011949e942ce0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-dev-i386-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-i386-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "367bfefa3942323f9109497ba996cdefe2068b3d1037e208b3c73b438ffff5b0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libstdc%2b%2b-15-dev-i386-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libstdc++-15-dev-i386-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "bf90a9982cc0ebe9fb552d7c2b27dc0b308965adafdfc6e3880376c207e07d10"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/g%2b%2b-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "g++-15-i686-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "6e401596cf09e6bf797f8ea85a29670bba77dc8ba15c178894536a77ad5b542e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/gcc-i686-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "gcc-i686-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "ac87296cab3c9cd9bafc7fd9f52baafd7da8d0f1f6aad5e717185957b6728674"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/g%2b%2b-i686-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "g++-i686-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "cdabad9bd8b98d2f3b952b032162301a75d090e413993fb880e018f0a268d2a8"
+      }
+    ]
+  },
+  "loongarch64-linux-gnu": {
+    "kind": "deb",
+    "arch": "loongarch64",
+    "triple": "loongarch64-linux-gnu",
+    "qemu": "qemu-loongarch64",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-loongarch64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-loongarch64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "sha256": "cccd70fb9d45ee22e95bb38813661ba16c2e5bdcf98028309af8f5fe164e2b38"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/gcc-15-loongarch64-linux-gnu-base_15.2.0-16ubuntu1cross2_amd64.deb",
+        "filename": "gcc-15-loongarch64-linux-gnu-base_15.2.0-16ubuntu1cross2_amd64.deb",
+        "sha256": "7a23749cb6c5125ab4f5ffc8a36a0f49582db6ce1b430a8b85c2c5d79d9e0397"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/cpp-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "filename": "cpp-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "sha256": "632e30bbe3f342074fe259245e4d13f36fbc239ca981390e8e8c58f5ffa36c82"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-defaults-ports/cpp-loongarch64-linux-gnu_15.2.0-4ubuntu1_amd64.deb",
+        "filename": "cpp-loongarch64-linux-gnu_4%3a15.2.0-4ubuntu1_amd64.deb",
+        "sha256": "28810e4359c3d87ce3c0bc1a188abb8675e8415b921137e85d9dc8db94539277"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/c/cross-toolchain-base-ports/libc6-loong64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-loong64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "2e1026dfd42167183d909948b4df310e11c9d01498b9d0979d645cead409c972"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libgcc-s1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "8da31728d9044330387143e443d6f0a85094b12f2d88b5df7bd969ea9af7d2aa"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libgomp1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "de6064ebbf6103a5e40e27112ec08b5570ce2e01d5dab486b90711c0742d7228"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libitm1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libitm1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "52c88a1b0ade027c2a5865f3376215ed40eeecbcfd89c6d48afa013bc3c5c1da"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libatomic1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "cc22c7e37138601d4945603b086024afd01c8d8560ad3e9e4f8274cb9f099561"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libasan8-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "ab10455873a5c29ee9a901bc662f411fda23ffcab4e6606e6c7e6d536fa92901"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/liblsan0-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "liblsan0-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "fce0da8bc7fdeb060cd176c8df13f8c0abb8e0ead9a4c8de8246b1067a9aac1c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libtsan2-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libtsan2-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "b7e2acec2a5d697eabb8b415760c44cea1331ac388e6d3f5fc28121caf14103c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libstdc%2b%2b6-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "6332fbf5b979c94b09f9e9851feca4af2960338d7c17b8811cf986ded0ad8bf9"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-16-cross-ports/libubsan1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-loong64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "283dfb38a630c4be853720bfd3e435c358bef9815981b5ebaf9b4000a030e3be"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/libgcc-15-dev-loong64-cross_15.2.0-16ubuntu1cross2_all.deb",
+        "filename": "libgcc-15-dev-loong64-cross_15.2.0-16ubuntu1cross2_all.deb",
+        "sha256": "665766f90861eedfb3fa814d8fdcc01cd205894a99043be3343ce3c07f7cbf14"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/gcc-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "filename": "gcc-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "sha256": "2b24090c2595e3a0fc382e9657e76ec4a3a56c5361138ca9e2912ae3b674a739"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/c/cross-toolchain-base-ports/linux-libc-dev-loong64-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-loong64-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "f02c3f771d1e16b7c62f4979fdbb2604340f1fc53931aac32d4bd3236265f48d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/c/cross-toolchain-base-ports/libc6-dev-loong64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-loong64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "7a281e164ec545ed4dacd502e10b736fefb2b5dc9a40295b3ac38a7769705574"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/libstdc%2b%2b-15-dev-loong64-cross_15.2.0-16ubuntu1cross2_all.deb",
+        "filename": "libstdc++-15-dev-loong64-cross_15.2.0-16ubuntu1cross2_all.deb",
+        "sha256": "e9d5cfc30149b38f3ea621f91a2ff5134a307a7d0f13a7701bdcf64129d0b322"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-15-cross-ports/g%2b%2b-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "filename": "g++-15-loongarch64-linux-gnu_15.2.0-16ubuntu1cross2_amd64.deb",
+        "sha256": "d8c0236153fcedc4dd3c829ba8a99c9b80e6b70782ffc33c2595fd37dc98ad51"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-defaults-ports/gcc-loongarch64-linux-gnu_15.2.0-4ubuntu1_amd64.deb",
+        "filename": "gcc-loongarch64-linux-gnu_4%3a15.2.0-4ubuntu1_amd64.deb",
+        "sha256": "d83780e83eb6cd065f91586ed454776ae8676ba4cf0ae72a39304d4d49b82ae1"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/universe/g/gcc-defaults-ports/g%2b%2b-loongarch64-linux-gnu_15.2.0-4ubuntu1_amd64.deb",
+        "filename": "g++-loongarch64-linux-gnu_4%3a15.2.0-4ubuntu1_amd64.deb",
+        "sha256": "3ea6cd7972b87d9e731922b0e595119460564438def7ca247a55de84d9a87814"
+      }
+    ]
+  },
+  "powerpc64le-linux-gnu": {
+    "kind": "deb",
+    "arch": "ppc64le",
+    "triple": "powerpc64le-linux-gnu",
+    "qemu": "qemu-ppc64le",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-powerpc64le-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-powerpc64le-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "8eede78dacc03290edcf73295749b5474ab245febf06c37caf1fc26a76ae335f"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/cpp-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "cpp-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "078e17d2cb1a6aeabe21b9a2d03dde89726f6b57bde7fe1f7c37739dc46564f9"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/cpp-powerpc64le-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "cpp-powerpc64le-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "598d4d17a3c38e7556599d1b950bebc32369a87167eaae59d7b5ab28f67121a5"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-powerpc64le-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-powerpc64le-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "sha256": "d3529b0b36ab3713c85342eb74e285b91104d7262542c2dfebf4ed0da14bd06a"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-ppc64el-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-ppc64el-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "8a1bd082c2cc49e51fd60f9f7b1ff298dd300081a3cfd8e7aadbbabe1bb87dfc"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgcc-s1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "0f859be55fbadad1de046a9ac08676326702b63c0d14942f85589676e19c1bac"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgomp1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "c0a11bf397359fd109eebf6d17b5dc93631fa82330e0d4f40d91ef4bd87d2342"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libitm1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libitm1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "6a1025237e5240e79919aab6ea4337ee2642102664374839d8b986091846072d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libatomic1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "fa84bdbd1dabfbeeb39b4e79c9ba0f710e9b3e2c354b09218c74e567ce146b80"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libasan8-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "7f975ce316e27f19f1f740c8aeb633ea8961ca41cf1b5a9d162e7b85d41f9a5c"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/liblsan0-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "liblsan0-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "932e0182031ade38a0370f32d9ed7e3fc25a69e912bbff3f135bbe75ac1b7177"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libtsan2-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libtsan2-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "9090b502fc7a1aba87d0935201e065f7e9576ea6d91045ecb374e656270e3ffe"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libstdc%2b%2b6-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "2acf5e183383dd122ee2d1dedcbd330fd228ee98652a0207945ccfb231919e9a"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libubsan1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "dcb1a7f796fb629aeea468b40657afc7723149b5044532b8b2c81105259c6926"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libquadmath0-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libquadmath0-ppc64el-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "4ec6b56885023fc67900ed6d2c9a7f0558df0bb352ce5ebd6269a119a62272b3"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libgcc-15-dev-ppc64el-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libgcc-15-dev-ppc64el-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "c4f3d044c5c56bb6cae16bb8c85fa71c77856aeed354d713eb1fd9cabb1337cf"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "10e9ad7ce62a1bdfaa83a7ddd77756bc764ce90008dfed357b2c13acd3797bb0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/linux-libc-dev-ppc64el-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-ppc64el-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "52d95afb6db6050cfd32329df3a5e9c1c57f3bf190d1b5154a76205295e3872e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-dev-ppc64el-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-ppc64el-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "a16dbbd6b529b2280bd05d9bb4b8f9108391fe70d1a5d2178a8e71fc490b9b2e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libstdc%2b%2b-15-dev-ppc64el-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libstdc++-15-dev-ppc64el-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "2a7e0c7aad60be40a482c287f74ca13522dc3b89d2fc52654b74830e31fad23d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/g%2b%2b-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "g++-15-powerpc64le-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "f62e7c0d7c2c28324c61f33f6a0948ee793cebdb391d97768181b18449e4aa0e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/gcc-powerpc64le-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "gcc-powerpc64le-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "99fdb6c1755e60867e863401fee29ca1bcaba89a3c09c0bd8ea89497e109c074"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/g%2b%2b-powerpc64le-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "g++-powerpc64le-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "2fcb6533408a4dea2eb899ade1f7cdfc45822db7ea370e0c96e4874c133fe397"
+      }
+    ]
+  },
+  "riscv64-linux-gnu": {
+    "kind": "deb",
+    "arch": "riscv64",
+    "triple": "riscv64-linux-gnu",
+    "qemu": "qemu-riscv64",
+    "packages": [
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-riscv64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "filename": "binutils-riscv64-linux-gnu_2.46-3ubuntu2_amd64.deb",
+        "sha256": "ce820bb6d2d7de22fb2b45dfc374a71095dedf8a554364a22758bb352a7fc2f9"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-riscv64-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-riscv64-linux-gnu-base_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "2c9128a5dfb91bcd262a0a83b62513efd37508cfe30ea0ea39bd22ffd8f494b0"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/cpp-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "cpp-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "9ee715e5d80b20d35dc203337f0534639a959a682964971d37691d1935522ed5"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/cpp-riscv64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "cpp-riscv64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "fff6d3e4d948a5e9bc7d21429d6cc9a13ceb29acbdca329fc22cd41c82d2187a"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-riscv64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-riscv64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "ede35a119f1cdba5b2d4093ea4a64801b137e380c9adc9963b04c7b6fe2ae2c5"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgcc-s1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgcc-s1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "936e41913fadc695e56b0cd62d3c981a950849f16ce818d6fbfd919adf0dea0e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libgomp1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libgomp1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "69f23c95b2d5c0e6ecff54aaaadfa595f77fbdfee2afae6416f2ecb6c7e4693d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libitm1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libitm1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "3cffb22d0d9c87b9439a1725171c798ac1ef76232e97a9647ae9684c14b81035"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libatomic1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libatomic1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "d63fc5cc0bb8af3139015179aaf265fcf621b6cc354a4b4d0b1ba4abc1d9615d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libasan8-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libasan8-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "3673ef5a82c4ee8f308b4dc7417375a742e2fa901f2df92f113773dacf87ba1d"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/liblsan0-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "liblsan0-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "3bdbf165bc2ca833a58523589686535276c9f2221dd367f3436a6139fa598685"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libtsan2-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libtsan2-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "2f6a05399bcbf157e6f0fc8c05f17b7b16b582d47cfbc2fdcbad46e2ef79d6a7"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libstdc%2b%2b6-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libstdc++6-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "02dfda00dd943e5810f9b53a0c4628dc14d4830d32d36cfae652e06800cf1889"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-16-cross/libubsan1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "filename": "libubsan1-riscv64-cross_16-20260322-1ubuntu1cross1_all.deb",
+        "sha256": "cd36c0786d9a86644b07ea75fa91b439e72e3a1592d14e87516b8e787b8f5424"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libgcc-15-dev-riscv64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libgcc-15-dev-riscv64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "3410681ad2ecc95b521a651b5fe9e1ae4ce050de11ef170ebfda50c5f40f88ee"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/gcc-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "gcc-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "475c8a1ef209237eb6acd9f3c256922b1e1ef77cd3d951f9693f54f72f74e482"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/linux-libc-dev-riscv64-cross_7.0.0-13.13cross1_all.deb",
+        "filename": "linux-libc-dev-riscv64-cross_7.0.0-13.13cross1_all.deb",
+        "sha256": "47ecf11a8e6d4d09ee7dccc1cb83de8d2a424b4e0cd7e5e325b8dea7aa6f701e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cross-toolchain-base/libc6-dev-riscv64-cross_2.43-2ubuntu2cross1_all.deb",
+        "filename": "libc6-dev-riscv64-cross_2.43-2ubuntu2cross1_all.deb",
+        "sha256": "134df7386b22367c1b59019c0b44ef97043cdfe14e28de84e43a3840852a0f24"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/libstdc%2b%2b-15-dev-riscv64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "filename": "libstdc++-15-dev-riscv64-cross_15.2.0-16ubuntu1cross1_all.deb",
+        "sha256": "123b4e47f19acab90b28b8952ae21fc3dcc88b06dee1956b733fa228be3931c5"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-15-cross/g%2b%2b-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "filename": "g++-15-riscv64-linux-gnu_15.2.0-16ubuntu1cross1_amd64.deb",
+        "sha256": "294681926ed91e7ca2053459d2a5385d8d27de2f5c61ba6e15b564729a07cb89"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/gcc-riscv64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "gcc-riscv64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "f4358a1a85b4310a8ced2ef45a13b3b7390c6e7e0c06c92ac3059b2d8c42a51e"
+      },
+      {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-defaults/g%2b%2b-riscv64-linux-gnu_15.2.0-5ubuntu1_amd64.deb",
+        "filename": "g++-riscv64-linux-gnu_4%3a15.2.0-5ubuntu1_amd64.deb",
+        "sha256": "2eb72675b0c0c25f63a1ca534be2a7a3719bf51a78432cacef605233124653dd"
+      }
+    ]
+  },
+  "mips64-linux-gnu": {
+    "kind": "deb",
+    "arch": "mips64",
+    "triple": "mips64-linux-gnuabi64",
+    "qemu": "qemu-mips64",
+    "packages": [
+      {
+        "url": "https://deb.debian.org/debian/pool/main/b/binutils/libsframe1_2.44-3_amd64.deb",
+        "filename": "libsframe1_2.44-3_amd64.deb",
+        "sha256": "38f625dfdc582717029ac3a3e97c51d994ec2e7a0e9b230c6b44e40d1276311f"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/b/binutils-mipsen/binutils-mips64-linux-gnuabi64_2.44-3cross1%2bnmu1%2bb1_amd64.deb",
+        "filename": "binutils-mips64-linux-gnuabi64_2.44-3cross1+nmu1+b1_amd64.deb",
+        "sha256": "3e8b0b31d3ef2ddbb6b2951a25c4bcd81b36ad2146418597ac6e5d2880ab9df2"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/gcc-14-mips64-linux-gnuabi64-base_14.2.0-13cross1_amd64.deb",
+        "filename": "gcc-14-mips64-linux-gnuabi64-base_14.2.0-13cross1_amd64.deb",
+        "sha256": "94bc1dc91de52529e80bc21b0d765a0c07ea1ece691b4aeeb40793455942a3c0"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/cpp-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "cpp-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "b4ef5adb08ba171d5b60d04916dbe51067291357786213d2e44040285a119aeb"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/cpp-mips64-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "cpp-mips64-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "ca58ec4a382bde6890ed9082c2c4562ab71cf28d9ccce980ed41b4f7f364a6c0"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/libc6-mips64-cross_2.40-5cross1_all.deb",
+        "filename": "libc6-mips64-cross_2.40-5cross1_all.deb",
+        "sha256": "b8bb99854cfe31671a2971cdd81af6fc16bb8b87ffbd081dff574a244e52e38b"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgcc-s1-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgcc-s1-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "5404be463d1a9abab24c4378915f2bc62e6019a3d1a013f679c6902ea1c7c800"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgomp1-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgomp1-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "bc2457753397da2f1e3872837ab05ebbd385abc905ef11b41a9c155c4477d49b"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libatomic1-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libatomic1-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "8f0a161fe46b2b3719c5a29be1f79f75130221cd544c159dfdf6b14ad1f89a0a"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgcc-14-dev-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgcc-14-dev-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "7793f353f33c6b4208f36f8fe6ae2682e3e2f85429d5f447c7e79ee4509f1796"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/gcc-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "gcc-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "b81bccf60910db2eafa86e3a53d8411f747f2e630fd24a4f845dca8a094da398"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libstdc%2b%2b6-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libstdc++6-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "3216eeaaf8344a2e5aed2f5d44cc99d1fbdbd20eaa2a336a817a247d41f5db38"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/linux-libc-dev-mips64-cross_6.12.8-1cross1_all.deb",
+        "filename": "linux-libc-dev-mips64-cross_6.12.8-1cross1_all.deb",
+        "sha256": "4918045f506ebcc2eb520d881e673a52e42bd8632754eb9af564b19ec9496ce9"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/libc6-dev-mips64-cross_2.40-5cross1_all.deb",
+        "filename": "libc6-dev-mips64-cross_2.40-5cross1_all.deb",
+        "sha256": "9401fb3160572addddeff6073d9aa0b85e97edeaf25b219a86dd79c3b3885998"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libstdc%2b%2b-14-dev-mips64-cross_14.2.0-13cross1_all.deb",
+        "filename": "libstdc++-14-dev-mips64-cross_14.2.0-13cross1_all.deb",
+        "sha256": "c61d66e77b9f57c292199cf8fb6fe0956fe146534166233e4f57b696385d25aa"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/g%2b%2b-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "g++-14-mips64-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "55e9f9a436165779cb5e36dba3ab65dfafa12eabc0a11a905cabc406ddeb4ee0"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/gcc-mips64-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "gcc-mips64-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "9931b30370dba0d9709b914968536392d2e48a51593a56780768e48d11a97b56"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/g%2b%2b-mips64-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "g++-mips64-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "4a00be94f49c5d08c4941e466d335dbf5209e3a3af2b31a137e89b1e4c8a6a84"
+      }
+    ]
+  },
+  "mips64el-linux-gnu": {
+    "kind": "deb",
+    "arch": "mips64el",
+    "triple": "mips64el-linux-gnuabi64",
+    "qemu": "qemu-mips64el",
+    "packages": [
+      {
+        "url": "https://deb.debian.org/debian/pool/main/b/binutils/libsframe1_2.44-3_amd64.deb",
+        "filename": "libsframe1_2.44-3_amd64.deb",
+        "sha256": "38f625dfdc582717029ac3a3e97c51d994ec2e7a0e9b230c6b44e40d1276311f"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/b/binutils-mipsen/binutils-mips64el-linux-gnuabi64_2.44-3cross1%2bnmu1%2bb1_amd64.deb",
+        "filename": "binutils-mips64el-linux-gnuabi64_2.44-3cross1+nmu1+b1_amd64.deb",
+        "sha256": "91cfe25a2d23d1fbb66d308062903d35ea1a220a19d4258048bfd77bd7f45c41"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/gcc-14-mips64el-linux-gnuabi64-base_14.2.0-13cross1_amd64.deb",
+        "filename": "gcc-14-mips64el-linux-gnuabi64-base_14.2.0-13cross1_amd64.deb",
+        "sha256": "42fe805a8305134509703ae633784cd8a532660eb98afce9c851bb1f05c4375e"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/cpp-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "cpp-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "506afea2be524a22d00c573efdb4e447e609237323714c227483db6de7159492"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/cpp-mips64el-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "cpp-mips64el-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "485d172a873485105c455a9c265e2d77317280b20d7f2728be380e36edf97724"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/libc6-mips64el-cross_2.40-5cross1_all.deb",
+        "filename": "libc6-mips64el-cross_2.40-5cross1_all.deb",
+        "sha256": "2d18f4f67845b963065411d10b88d3e49c34b6cf506da7973e26dac805b95bff"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgcc-s1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgcc-s1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "cdf63988e831819716704902309ae6c4148c114272ec65893eead68f5fa477e5"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgomp1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgomp1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "dc60a6e8a5b67b938b3cb13eeb33cec9f527c5faa11ca1d32d307e5af90f8ea1"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libatomic1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libatomic1-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "80f2aa13b839152652d65b07fac1d1f4f673214c124f4db2bb27f386c900db87"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libgcc-14-dev-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libgcc-14-dev-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "dc2a3193e7ba4a8a8b09d6298e2240bb6198465b127357ad38379cd00f01bb3b"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/gcc-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "gcc-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "969923dc5024287eb5d53f69975d75f3942afe478375762fbe557b42ef6e903c"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libstdc%2b%2b6-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libstdc++6-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "c11109990e676150c43ade513b501a0da1d49b1d07842a3a2142d2cfd65d3a9d"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/linux-libc-dev-mips64el-cross_6.12.8-1cross1_all.deb",
+        "filename": "linux-libc-dev-mips64el-cross_6.12.8-1cross1_all.deb",
+        "sha256": "b8c0ccfae98a1b7faa9373656cad53967d06f890f8597aa15aacf6af75e36ef0"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/c/cross-toolchain-base-mipsen/libc6-dev-mips64el-cross_2.40-5cross1_all.deb",
+        "filename": "libc6-dev-mips64el-cross_2.40-5cross1_all.deb",
+        "sha256": "fa9acd46bca8e9ea4f096a34903ebe8d15262fcbab6c6638c08d6ba30f022263"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/libstdc%2b%2b-14-dev-mips64el-cross_14.2.0-13cross1_all.deb",
+        "filename": "libstdc++-14-dev-mips64el-cross_14.2.0-13cross1_all.deb",
+        "sha256": "efa867b9929545dc2bb146e81a9553ed1ef56833b73cd4484a5f302c26e719ee"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-14-cross-mipsen/g%2b%2b-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "filename": "g++-14-mips64el-linux-gnuabi64_14.2.0-13cross1_amd64.deb",
+        "sha256": "c6563f17df6bf4d2ba830d88721219d3ed92ac6ca4a5c2e86984dc222464186e"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/gcc-mips64el-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "gcc-mips64el-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "af3311516715385cf12713258397ecc4d9279c65ed276aa8cea9d0681b3fff2a"
+      },
+      {
+        "url": "https://deb.debian.org/debian/pool/main/g/gcc-defaults-mipsen/g%2b%2b-mips64el-linux-gnuabi64_14.2.0-1_amd64.deb",
+        "filename": "g++-mips64el-linux-gnuabi64_4%3a14.2.0-1_amd64.deb",
+        "sha256": "22b985495e7f248d8101c8262c04082dd67cffb60e2633a2f3ac743c4b2bf72a"
+      }
+    ]
+  },
+  "x86_64-linux-musl": {
+    "kind": "tar",
+    "arch": "x86_64",
+    "triple": "x86_64-buildroot-linux-musl",
+    "qemu": "qemu-x86_64",
+    "url": "https://toolchains.bootlin.com/downloads/releases/toolchains/x86-64/tarballs/x86-64--musl--stable-2026.08-1.tar.xz",
+    "sha256": "78d3a4683d6ac47b5ee73bd5bce210b55eb93dff1b137c61298af97eb0d2b5a6"
+  }
+}

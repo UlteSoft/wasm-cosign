@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 The Sigstore Authors.
 # Licensed under the Apache License, Version 2.0.
-"""Generate bilingual release notes for the gated five-target workflow."""
+"""Generate bilingual release notes for the gated complete-platform workflow."""
 import re
 import sys
 
@@ -17,13 +17,15 @@ print(f'''# wasm-cosign {version}
 多签与版本轮换、WASIp1、浏览器 / Node SDK、构建、测试及 CI/CD。
 [中文文档]({base}/README.zh_CN.md)
 
-发行目标：Linux x86_64（静态）、macOS 15+ AArch64 / x86_64、wasm32-wasip1、wasm32-js。
-其他平台旧版文件仍可在原标签下载，本次不将未运行目标测试的平台列为新版本支持。
+发行目标共 15 个：静态 Linux AArch64、ARMv7 hard-float、i686、LoongArch64、
+MIPS64 大端 / 小端、PowerPC64 LE、RISC-V64、x86_64 GNU / musl；
+FreeBSD 15.1+ x86_64、macOS 15+ AArch64 / x86_64、wasm32-wasip1、wasm32-js。
 所有包包含两种语言文档、许可证及源码身份信息，SHA256SUMS 校验归档。
 
 发布流程在真实 UWVM、Wasmtime、Node 中验证 277 个对照用例、76 项互通签名检查和
 13 项宿主安全检查，并执行原生产品测试、双方源码一致性与严格 MVP 检查。
-Linux 资格验证使用 64 GiB、零 swap cgroup；macOS 在各架构托管 runner 原生测试。
+Linux 与 FreeBSD/QEMU 资格验证使用 64 GiB、零 swap cgroup；macOS 在各架构托管 runner 原生测试。
+所有新增原生目标都执行完整产品测试；Linux 交叉目标使用实际 QEMU，FreeBSD 在真实客体系统内构建和测试。
 测试密钥、样本、日志、结果和构建中间文件不进入附件。
 
 WSEA v2 容器与 13 种算法不变。支持至多八个不同密钥的混合多签。
@@ -37,15 +39,17 @@ Complete matching zh_CN / en_US documentation now covers the native CLI, WSEA
 security rules, multi-signatures and key/version rotation, WASIp1, browser / Node
 SDKs, building, testing and CI/CD. [English documentation]({base}/README.en_US.md)
 
-Targets: static Linux x86_64, macOS 15+ AArch64 / x86_64, wasm32-wasip1 and wasm32-js.
-Older assets for other platforms remain at their original tags; unexecuted target
-configurations are not qualified by this release. Every archive includes both
+Fifteen targets: static Linux AArch64, ARMv7 hard-float, i686, LoongArch64,
+MIPS64 big/little endian, PowerPC64 LE, RISC-V64, x86_64 GNU/musl; FreeBSD 15.1+
+x86_64; macOS 15+ AArch64/x86_64; wasm32-wasip1 and wasm32-js. Every archive includes both
 documentation languages, licenses and source provenance; SHA256SUMS covers archives.
 
 Publication requires 277 corpus cases and 76 signing/interoperability checks on
 real UWVM, Wasmtime and Node, 13 host-security checks, native product tests,
-paired-source checks and strict MVP validation. Linux qualification uses a 64 GiB
-zero-swap cgroup; macOS runs natively on the matching hosted architecture.
+paired-source checks and strict MVP validation. Linux and FreeBSD/QEMU qualification
+use a 64 GiB zero-swap cgroup; macOS runs natively on the matching hosted architecture.
+Every additional native target runs the full product tests, using actual QEMU for
+Linux cross builds and a real FreeBSD guest for FreeBSD builds and tests.
 Generated keys, fixtures, logs, reports and build intermediates are excluded.
 
 The WSEA v2 container and all 13 algorithm profiles are unchanged, including mixed

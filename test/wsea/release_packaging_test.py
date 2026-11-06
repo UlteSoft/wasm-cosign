@@ -58,7 +58,7 @@ class ReleaseGateTest(unittest.TestCase):
             self.build(Path(d))
             result = self.gate(d)
             self.assertEqual(result.returncode, 0, result.stderr.decode())
-            self.assertEqual(len((Path(d) / 'SHA256SUMS').read_text().splitlines()), 5)
+            self.assertEqual(len((Path(d) / 'SHA256SUMS').read_text().splitlines()), len(TARGETS))
 
     def test_contaminated_or_mismatched_archives_are_refused(self):
         for mutation in ('revision', 'key', 'translation', 'tamper', 'traversal', 'missing-target'):
