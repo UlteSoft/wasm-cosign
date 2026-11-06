@@ -1,100 +1,36 @@
-# Copyright 2024 The Sigstore Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 name: golangci-lint
 
 on:
   push:
-    branches:
-      - 'main'
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+  workflow_call:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   golangci:
-    name: lint
-    runs-on: ubuntu-latest
-    env:
-      PKG_CONFIG_PATH: ${{ github.workspace }}/.tmp/wsea-build/openssl/pkgconfig
-      PKG_CONFIG_LIBDIR: ${{ github.workspace }}/.tmp/wsea-build/openssl/pkgconfig
-      PKG_CONFIG_SYSROOT_DIR: ''
-
-    permissions:
-      contents: read
-
+    name: Product lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Extract version of Go to use
-        run: echo "GOVERSION=$(awk -F'[:@]' '/FROM golang/{print $2; exit}' Dockerfile)" >> $GITHUB_ENV
-
-      - name: "Extract golangci-lint version from Dockerfile.golangci-lint"
-        id: "golangci-lint-version"
-        run: |
-          awk -F '[@:]' '/FROM golangci\/golangci-lint/{print "version="$2; exit}' Dockerfile.golangci-lint >> "$GITHUB_OUTPUT"
-
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '${{ env.GOVERSION }}'
-          check-latest: true
+          go-version: '1.26.8'
           cache: false
-
-      - name: Build bundled WSEA OpenSSL
+      - name: Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y g++ pkg-config perl make python3
-          make bundled-openssl
-          echo "CGO_CPPFLAGS=$(cat .tmp/wsea-build/openssl/cgo-cppflags)" >> "$GITHUB_ENV"
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: ${{ steps.golangci-lint-version.outputs.version }}
-          args: ./cmd/cosign ./cmd/wasmcosign ./internal/wasmsdk ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
-
-  golangci-test-e2e:
-    if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}
-    name: lint-test-e2e
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Extract version of Go to use
-        run: echo "GOVERSION=$(awk -F'[:@]' '/FROM golang/{print $2; exit}' Dockerfile)" >> $GITHUB_ENV
-
-      - name: "Extract golangci-lint version from Dockerfile.golangci-lint"
-        id: "golangci-lint-version"
+      - name: Lint the complete product under the resource cap
         run: |
-          awk -F '[@:]' '/FROM golangci\/golangci-lint/{print "version="$2; exit}' Dockerfile.golangci-lint >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '${{ env.GOVERSION }}'
-          check-latest: true
-          cache: false
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: ${{ steps.golangci-lint-version.outputs.version }}
-          args: --build-tags e2e ./test
+          sudo systemd-run --unit="wsea-lint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
+            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property=TasksMax=512 --property=CPUQuota=200% /usr/bin/env PATH="$PATH" HOME="$HOME" \
+            bash scripts/lint_wsea.sh

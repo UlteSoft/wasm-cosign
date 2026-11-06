@@ -55,12 +55,17 @@ def main():
     if not 1 <= a.jobs <= 8:
         p.error('jobs must be in 1..8')
     sdk, optimizer, out = a.wasi_sdk.resolve(strict=True), a.wasm_opt.resolve(strict=True), a.output.resolve()
+    if not out.is_relative_to(ROOT / '.tmp'):
+        p.error('generated build output must remain under project .tmp')
     if any(c.isspace() or c in "'\"\\$#" for c in str(out) + str(sdk)):
         p.error('build paths must not contain toolchain metacharacters')
     out.mkdir(parents=True, exist_ok=True)
     scratch = out / 'tmp'
     scratch.mkdir(exist_ok=True)
-    env = os.environ | {'TMPDIR': str(scratch), 'GOTMPDIR': str(scratch), 'GOMAXPROCS': '2', 'SOURCE_DATE_EPOCH': '0'}
+    for name in ('go-cache', 'go-modules'):
+        (out / name).mkdir(exist_ok=True)
+    env = os.environ | {'TMPDIR': str(scratch), 'GOTMPDIR': str(scratch), 'GOMAXPROCS': '2', 'SOURCE_DATE_EPOCH': '0',
+                        'GOCACHE': str(out / 'go-cache'), 'GOMODCACHE': str(out / 'go-modules')}
     builder = load_builder()
     source = builder.verify_source(ROOT / 'third_party/openssl')
     if source != builder.verify_source(a.uwvm_root / 'third-parties/openssl'):

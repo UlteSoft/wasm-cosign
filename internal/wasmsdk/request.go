@@ -169,7 +169,7 @@ func Process(data []byte) Response {
 		if err != nil {
 			return fail(err)
 		}
-		var contributions []wasmsecure.Evidence
+		contributions := make([]wasmsecure.Evidence, 0, 1)
 		if s.Append {
 			now := time.Now()
 			old, err := wasmsecure.VerifyEmbeddedPartial(module, p, r.Trust.Roots, now)

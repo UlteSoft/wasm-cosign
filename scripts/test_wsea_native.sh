@@ -3,9 +3,10 @@
 # Licensed under the Apache License, Version 2.0.
 set -euo pipefail
 umask 077
-mkdir -p .tmp/native-ci/tmp .tmp/native-ci/go-cache
+mkdir -p .tmp/native-ci/tmp .tmp/native-ci/go-cache .tmp/native-ci/go-modules
 export TMPDIR="$PWD/.tmp/native-ci/tmp" GOTMPDIR="$PWD/.tmp/native-ci/tmp"
 export GOCACHE="$PWD/.tmp/native-ci/go-cache" GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3
+export GOMODCACHE="$PWD/.tmp/native-ci/go-modules"
 export WSEA_OPENSSL_ROOT="$PWD/.tmp/native-ci/openssl" PYTHONDONTWRITEBYTECODE=1
 make bundled-openssl
 export PKG_CONFIG_PATH="$WSEA_OPENSSL_ROOT/pkgconfig" PKG_CONFIG_LIBDIR="$WSEA_OPENSSL_ROOT/pkgconfig"

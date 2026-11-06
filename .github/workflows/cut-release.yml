@@ -41,6 +41,15 @@ jobs:
           PYCODE
       - name: Check bilingual documentation
         run: python3 scripts/check_wsea_docs.py
+  checks:
+    needs: admission
+    uses: ./.github/workflows/tests.yaml
+  documents:
+    needs: admission
+    uses: ./.github/workflows/verify-docgen.yaml
+  lint:
+    needs: admission
+    uses: ./.github/workflows/golangci-lint.yml
   wasm:
     needs: admission
     uses: ./.github/workflows/wsea-ci.yml
@@ -52,7 +61,7 @@ jobs:
     with:
       version: ${{ needs.admission.outputs.version }}
   publish:
-    needs: [admission, wasm, native]
+    needs: [admission, checks, documents, lint, wasm, native]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

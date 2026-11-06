@@ -22,9 +22,10 @@ CI 另使用 LLVM 22.1.8 构建真实 UWVM 解释器，并测试 Wasmtime 42.0.1
 
 ```sh
 umask 077
-mkdir -p .tmp/work/tmp .tmp/work/go-cache
+mkdir -p .tmp/work/tmp .tmp/work/go-cache .tmp/work/go-modules
 export TMPDIR="$PWD/.tmp/work/tmp" GOTMPDIR="$PWD/.tmp/work/tmp"
 export GOCACHE="$PWD/.tmp/work/go-cache" GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3
+export GOMODCACHE="$PWD/.tmp/work/go-modules"
 export PYTHONDONTWRITEBYTECODE=1
 export WSEA_OPENSSL_ROOT="$PWD/.tmp/work/openssl"
 ```

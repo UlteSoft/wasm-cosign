@@ -27,9 +27,10 @@ The following environment is useful inside an already admitted local Linux
 
 ```sh
 umask 077
-mkdir -p .tmp/work/tmp .tmp/work/go-cache
+mkdir -p .tmp/work/tmp .tmp/work/go-cache .tmp/work/go-modules
 export TMPDIR="$PWD/.tmp/work/tmp" GOTMPDIR="$PWD/.tmp/work/tmp"
 export GOCACHE="$PWD/.tmp/work/go-cache" GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3
+export GOMODCACHE="$PWD/.tmp/work/go-modules"
 export PYTHONDONTWRITEBYTECODE=1
 export WSEA_OPENSSL_ROOT="$PWD/.tmp/work/openssl"
 ```

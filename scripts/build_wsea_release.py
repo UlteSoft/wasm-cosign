@@ -59,7 +59,8 @@ def main():
         ap.error('generated work and release output must be under project .tmp')
     os.umask(0o077)
     work.mkdir(parents=True, exist_ok=True)
-    (work / 'tmp').mkdir(exist_ok=True)
+    for name in ('tmp', 'go-cache', 'go-modules'):
+        (work / name).mkdir(exist_ok=True)
     go = os.environ.get('GOEXE', 'go')
     host = json.loads(subprocess.check_output([go, 'env', '-json', 'GOHOSTOS', 'GOHOSTARCH']))
     goos, goarch = TARGETS[a.target]
@@ -70,7 +71,8 @@ def main():
                WSEA_TEST_EXEC_PREFIX=json.dumps(prefix),
                WSEA_OPENSSL_ROOT=str(crypto), PKG_CONFIG_PATH=str(crypto / 'pkgconfig'),
                PKG_CONFIG_LIBDIR=str(crypto / 'pkgconfig'), PKG_CONFIG_SYSROOT_DIR='',
-               TMPDIR=str(work / 'tmp'), GOTMPDIR=str(work / 'tmp'))
+               TMPDIR=str(work / 'tmp'), GOTMPDIR=str(work / 'tmp'),
+               GOCACHE=str(work / 'go-cache'), GOMODCACHE=str(work / 'go-modules'))
     if goarch == 'arm':
         env['GOARM'] = '7'
     if goos == 'darwin':

@@ -22,7 +22,7 @@ in `scripts/wsea_uwvm_revision.txt`, not a moving branch name.
 ## Continuous integration
 
 Checks run on pushes to `main` and pull requests, with read-only repository tokens
-and checkout credentials disabled. All external actions use full commit SHAs.
+and checkout credentials disabled. External actions in the WSEA workflows use full commit SHAs.
 Toolchain archive downloads are pinned by URL and SHA-256; new versions require
 an explicit source change and renewed qualification.
 
@@ -78,8 +78,8 @@ git push origin v0.2.1
 
 Use the next unused version instead of reusing this example. Pushing the tag
 starts **WSEA release** (`cut-release.yml`). Admission requires a semantic tag
-on `main` history. The workflow calls the native three-target builder and the
-portable qualification workflow. For portable releases, tests execute the exact
+on `main` history. The workflow calls native unit/race and generated-help checks, bilingual/workflow
+checks, the native three-target builder and portable qualification. For portable releases, tests execute the exact
 bytes extracted from the packaged archives, not just an earlier build tree.
 
 Only after all required jobs succeed does the isolated publication job receive
