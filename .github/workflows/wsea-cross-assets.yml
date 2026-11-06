@@ -111,10 +111,8 @@ jobs:
           ref: ${{ env.UWVM_REVISION }}
           path: .tmp/uwvm
           persist-credentials: false
-          sparse-checkout: |
-            src/uwvm2/utils/security
-            third-parties/openssl
-            tools/dependencies
+          # The guest receives a self-contained Git snapshot. A blob-filtered
+          # checkout cannot serve missing objects to a subsequent local clone.
       - name: QEMU virtual machine prerequisites
         run: |
           sudo apt-get update
