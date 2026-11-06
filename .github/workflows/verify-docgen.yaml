@@ -1,53 +1,33 @@
-#
-# Copyright 2021 The Sigstore Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-name: Docgen
+name: Bilingual documentation
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - 'main'
-      - 'release-*'
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
-  docgen:
-    name: Verify Docgen
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
+  documents:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: deps
-        run: sudo apt-get update && sudo apt-get install -yq g++ pkg-config perl make python3
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Extract version of Go to use
-        run: echo "GOVERSION=$(awk -F'[:@]' '/FROM golang/{print $2; exit}' Dockerfile)" >> $GITHUB_ENV
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '${{ env.GOVERSION }}'
-          check-latest: true
-          cache: false
-
-      - run: ./cmd/help/verify.sh
+      - name: Language pairs, examples and local links
+        run: python3 scripts/check_wsea_docs.py
+      - name: Validate workflow syntax and expressions
+        run: |
+          python3 scripts/fetch_wsea_toolchains.py --tools actionlint --output .tmp/lint-tools
+          .tmp/lint-tools/actionlint/actionlint -shellcheck=
+      - name: No generated qualification material is tracked
+        run: |
+          python3 - <<'PYCODE'
+          import subprocess
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          assert not any(p.startswith('.tmp/') for p in files)
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          PYCODE

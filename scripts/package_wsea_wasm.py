@@ -12,9 +12,10 @@ import re
 import subprocess
 import tarfile
 from build_wsea_wasm import source_hashes
+from wsea_documents import DOCUMENTS
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON = ('wsea-crypto.wasm', 'run.py', 'README.md', 'LICENSE', 'LICENSE-Go', 'LICENSE-OpenSSL')
+COMMON = ('wsea-crypto.wasm', 'run.py', 'LICENSE', 'LICENSE-Go', 'LICENSE-OpenSSL') + DOCUMENTS
 TARGETS = {
     'wasm32-wasip1': COMMON + ('wasm-cosign-wasi.wasm',),
     'wasm32-js': COMMON + ('wasm-cosign-js.wasm', 'wasm_exec.js', 'loader.mjs', 'run-json.mjs'),
@@ -44,9 +45,12 @@ def main():
         p.error('committed shared verifier sources differ')
     # Source-owned adapters/docs/licenses must match this exact commit. Go's
     # wasm_exec.js and binaries are checked against the qualified build receipt.
-    for name in ('loader.mjs', 'run-json.mjs', 'run.py', 'README.md', 'LICENSE-Go'):
+    for name in ('loader.mjs', 'run-json.mjs', 'run.py', 'LICENSE-Go'):
         if (a.artifacts / name).read_bytes() != (ROOT / 'wasm' / name).read_bytes():
             p.error('stale source-owned artifact: ' + name)
+    for name in DOCUMENTS:
+        if (a.artifacts / name).read_bytes() != (ROOT / name).read_bytes():
+            p.error('stale documentation artifact: ' + name)
     receipt = json.loads((a.artifacts.parent / 'wasm-receipt.json').read_text())
     if receipt['source_files'] != source_hashes():
         p.error('SDK source changed since artifact creation')
@@ -80,7 +84,8 @@ def main():
                 tar.addfile(entry, io.BytesIO(data))
         with tarfile.open(archive) as tar:
             members = tar.getmembers()
-            if {Path(v.name).name for v in members} != set(names) | {'RELEASE.json'} or not all(v.isfile() for v in members):
+            if ({v.name for v in members} != {prefix + '/' + name for name in (*names, 'RELEASE.json')}
+                    or len(members) != len(names) + 1 or not all(v.isfile() for v in members)):
                 raise RuntimeError('release archive differs from exact production allowlist')
         sums.append(sha(archive.read_bytes()) + '  ' + archive.name)
     (a.output / 'SHA256SUMS').write_text('\n'.join(sums) + '\n')

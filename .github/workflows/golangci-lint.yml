@@ -27,8 +27,8 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     env:
-      PKG_CONFIG_PATH: ${{ github.workspace }}/.wsea-build/openssl/pkgconfig
-      PKG_CONFIG_LIBDIR: ${{ github.workspace }}/.wsea-build/openssl/pkgconfig
+      PKG_CONFIG_PATH: ${{ github.workspace }}/.tmp/wsea-build/openssl/pkgconfig
+      PKG_CONFIG_LIBDIR: ${{ github.workspace }}/.tmp/wsea-build/openssl/pkgconfig
       PKG_CONFIG_SYSROOT_DIR: ''
 
     permissions:
@@ -58,13 +58,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++ pkg-config perl make python3
           make bundled-openssl
-          echo "CGO_CPPFLAGS=$(cat .wsea-build/openssl/cgo-cppflags)" >> "$GITHUB_ENV"
+          echo "CGO_CPPFLAGS=$(cat .tmp/wsea-build/openssl/cgo-cppflags)" >> "$GITHUB_ENV"
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ steps.golangci-lint-version.outputs.version }}
-          args: ./cmd/cosign ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
+          args: ./cmd/cosign ./cmd/wasmcosign ./internal/wasmsdk ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 
   golangci-test-e2e:
     if: ${{ vars.ENABLE_UPSTREAM_COSIGN_TESTS == 'true' }}

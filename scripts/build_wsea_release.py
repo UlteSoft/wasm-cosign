@@ -5,7 +5,7 @@
 
 Cross builds require the bundled OpenSSL target spec, CC/CXX and an actual
 execution prefix (for example QEMU). Failed builds/tests never produce archives.
-Keep --work outside the source tree; only final archives go to --output.
+Keep generated work under the project's ignored .tmp; package only explicit files.
 """
 from __future__ import annotations
 import argparse
@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from wsea_documents import DOCUMENTS
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {
@@ -36,7 +37,7 @@ TARGETS = {
     'x86_64-apple-darwin': ('darwin', 'amd64'),
     'x86_64-freebsd15': ('freebsd', 'amd64'),
 }
-PACKAGES = ['./cmd/cosign', './internal/wasmcli', './internal/wseanative',
+PACKAGES = ['./cmd/cosign', './cmd/wasmcosign', './internal/wasmsdk', './internal/wasmcli', './internal/wseanative',
             './pkg/wasmsecure', './cmd/cosign/cli/wasmsecure']
 
 
@@ -54,8 +55,8 @@ def main():
     if not isinstance(prefix, list) or not all(isinstance(x, str) and x for x in prefix):
         ap.error('execution prefix must be an argv array')
     work, output = a.work.resolve(), a.output.resolve()
-    if work == ROOT or ROOT in work.parents:
-        ap.error('work must be outside the checkout')
+    if not all(path.is_relative_to(ROOT / '.tmp') for path in (work, output)):
+        ap.error('generated work and release output must be under project .tmp')
     os.umask(0o077)
     work.mkdir(parents=True, exist_ok=True)
     (work / 'tmp').mkdir(exist_ok=True)
@@ -86,7 +87,17 @@ def main():
             sys.stderr.write(log_path.read_text(errors='replace')[-16000:])
             raise
 
-    run('source-guard', ['python3', 'scripts/check_wsea_build.py'])
+    counterpart = os.environ.get('UWVM2_ROOT')
+    if not counterpart:
+        ap.error('release qualification requires the explicit UWVM2_ROOT counterpart')
+    for tree in (ROOT, Path(counterpart)):
+        if subprocess.check_output(['git', 'status', '--porcelain'], cwd=tree):
+            ap.error('release source and counterpart must be committed and clean')
+    if subprocess.check_output(['git', '-C', counterpart, 'rev-parse', 'HEAD'], text=True).strip() != (
+            ROOT / 'scripts/wsea_uwvm_revision.txt').read_text().strip():
+        ap.error('release counterpart must match the pinned UWVM revision')
+    run('source-guard', ['python3', 'scripts/check_wsea_build.py', '--uwvm-root', counterpart])
+    run('documents', ['python3', 'scripts/check_wsea_docs.py'])
     run('openssl', ['python3', 'scripts/prepare_wsea_openssl.py'])
     env['CGO_CPPFLAGS'] = env.get('CGO_CPPFLAGS', '') + ' ' + (crypto / 'cgo-cppflags').read_text().strip()
     flags = '-s -w -X github.com/sigstore/cosign/v3/internal/wasmcli.Version=' + a.version
@@ -116,7 +127,7 @@ def main():
             raise RuntimeError('release depends on an external OpenSSL library')
     name = f'{a.target}-wasm-cosign-{a.version}'
     package = work / name
-    package.mkdir(exist_ok=True)
+    package.mkdir(exist_ok=False)
     shutil.copy2(binary, package / 'cosign')
     (package / 'cosign').chmod(0o755)
     for source, destination in [('LICENSE', 'LICENSE'),
@@ -124,6 +135,10 @@ def main():
             ('internal/wseanative/LICENSE-UWVM.md', 'LICENSE-UWVM.md'),
             ('doc/wsea-cli/cosign_wasm_secure.md', 'COMMANDS.md')]:
         shutil.copy2(ROOT / source, package / destination)
+    for relative in DOCUMENTS:
+        destination = package / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, destination)
     (package / 'README.txt').write_text(
         f'wasm-cosign {a.version} / {a.target}\n\n'
         'Usage: ./cosign wasm secure --help\n'
@@ -136,8 +151,22 @@ def main():
     archive = output / (name + '.tar.xz')
     if archive.exists():
         raise RuntimeError('refusing to overwrite an existing release archive')
+    files = ('cosign', 'LICENSE', 'LICENSE-OpenSSL.txt', 'LICENSE-UWVM.md', 'COMMANDS.md', 'README.txt') + DOCUMENTS
+    metadata = {'version': a.version, 'target': a.target, 'signature_container': 'uwvm.wsea.v2',
+                'source_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+                'uwvm_wsea_revision': subprocess.check_output(['git', '-C', counterpart, 'rev-parse', 'HEAD'], text=True).strip(),
+                'openssl': '3.5.9',
+                'files': {v: hashlib.sha256((package / v).read_bytes()).hexdigest() for v in files}}
+    (package / 'RELEASE.json').write_text(json.dumps(metadata, indent=2) + '\n')
     with tarfile.open(archive, 'w:xz') as stream:
-        stream.add(package, arcname=name)
+        for relative in (*files, 'RELEASE.json'):
+            entry = stream.gettarinfo(str(package / relative), arcname=name + '/' + relative)
+            entry.mtime = 0
+            entry.uid = entry.gid = 0
+            entry.uname = entry.gname = 'root'
+            entry.mode = 0o755 if relative == 'cosign' else 0o644
+            with (package / relative).open('rb') as content:
+                stream.addfile(entry, content)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     (output / (archive.name + '.sha256')).write_text(digest + '  ' + archive.name + '\n')
     print(str(archive), flush=True)

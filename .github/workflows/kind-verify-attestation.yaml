@@ -28,6 +28,7 @@ permissions: {}
 jobs:
   cip-test:
     name: attest / verify-attestation test
+    if: github.repository == 'sigstore/cosign'
     runs-on: ubuntu-latest
 
     strategy:

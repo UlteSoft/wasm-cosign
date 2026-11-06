@@ -31,7 +31,7 @@ def load_builder():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path(os.environ.get(
-        'WSEA_OPENSSL_ROOT', ROOT / '.wsea-build/openssl')))
+        'WSEA_OPENSSL_ROOT', ROOT / '.tmp/wsea-build/openssl')))
     parser.add_argument('--spec', type=Path, default=os.environ.get('WSEA_OPENSSL_SPEC'),
                         help='explicit UWVM target/compiler JSON spec, required for cross builds')
     args = parser.parse_args()

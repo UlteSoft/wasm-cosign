@@ -61,9 +61,9 @@ LDFLAGS=-buildid= -s -w -X github.com/sigstore/cosign/v3/internal/wasmcli.Versio
 # Only the WSEA product graph is compiled. Source-only upstream utilities are
 # not part of this binary or its default tests.
 SRCS = cmd/cosign/main.go $(shell find internal/wasmcli internal/wseanative pkg/wasmsecure cmd/cosign/cli/wasmsecure -type f)
-WSEA_PACKAGES = ./cmd/cosign ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
+WSEA_PACKAGES = ./cmd/cosign ./cmd/wasmcosign ./internal/wasmcli ./internal/wasmsdk ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 export CGO_ENABLED=1
-WSEA_OPENSSL_ROOT ?= $(CURDIR)/.wsea-build/openssl
+WSEA_OPENSSL_ROOT ?= $(CURDIR)/.tmp/wsea-build/openssl
 export WSEA_OPENSSL_ROOT
 # Both ordinary and release builds resolve only our pinned static crypto archive.
 override export PKG_CONFIG_PATH := $(WSEA_OPENSSL_ROOT)/pkgconfig
@@ -131,7 +131,7 @@ lint:
 		-v $(shell go env GOMODCACHE):/go/pkg/mod -e GOMODCACHE=/go/pkg/mod \
 		-v ~/.cache/golangci-lint:/.cache/golangci-lint -e GOLANGCI_LINT_CACHE=/.cache/golangci-lint \
 		$(shell awk -F '[ @]' '/FROM golangci\/golangci-lint/{print $$2; exit}' Dockerfile.golangci-lint) \
-		sh -c 'make bundled-openssl && PKG_CONFIG_PATH=/app/.wsea-build/openssl/pkgconfig PKG_CONFIG_LIBDIR=/app/.wsea-build/openssl/pkgconfig CGO_CPPFLAGS="$$(cat /app/.wsea-build/openssl/cgo-cppflags)" golangci-lint run -v $(WSEA_PACKAGES)'
+		sh -c 'make bundled-openssl && PKG_CONFIG_PATH=/app/.tmp/wsea-build/openssl/pkgconfig PKG_CONFIG_LIBDIR=/app/.tmp/wsea-build/openssl/pkgconfig CGO_CPPFLAGS="$$(cat /app/.tmp/wsea-build/openssl/cgo-cppflags)" golangci-lint run -v $(WSEA_PACKAGES)'
 
 test: bundled-openssl
 	python3 test/wsea/bundled_openssl_test.py

@@ -25,6 +25,7 @@ permissions: {}
 
 jobs:
   check-signature:
+    if: github.repository == 'sigstore/cosign'
     runs-on: ubuntu-latest
 
     permissions:

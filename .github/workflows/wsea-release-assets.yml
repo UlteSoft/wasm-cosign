@@ -1,10 +1,15 @@
-name: WSEA release assets
+name: WSEA native release assets
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Explicit release version (for example v0.1.0)
+        description: Existing semantic release tag to build
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
         required: true
         type: string
 
@@ -12,38 +17,86 @@ permissions:
   contents: read
 
 jobs:
-  native-macos:
+  native:
+    name: Native ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          - runner: ubuntu-24.04
+            target: x86_64-linux-gnu
           - runner: macos-26
             target: aarch64-apple-darwin
           - runner: macos-15-intel
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOMAXPROCS: '2'
+      WSEA_OPENSSL_JOBS: '3'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.version }}
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      - name: Select counterpart and temporary directories
+        run: |
+          umask 077
+          mkdir -p .tmp/tmp .tmp/go-cache
+          echo "TMPDIR=$PWD/.tmp/tmp" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$PWD/.tmp/tmp" >> "$GITHUB_ENV"
+          echo "GOCACHE=$PWD/.tmp/go-cache" >> "$GITHUB_ENV"
+          echo "UWVM2_ROOT=$PWD/.tmp/uwvm" >> "$GITHUB_ENV"
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          rev = pathlib.Path('scripts/wsea_uwvm_revision.txt').read_text().strip()
+          assert re.fullmatch('[a-f0-9]{40}', rev)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('UWVM_REVISION=' + rev + '\n')
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: UlteSoft/uwvm2-ros
+          ref: ${{ env.UWVM_REVISION }}
+          path: .tmp/uwvm
+          persist-credentials: false
+          sparse-checkout: |
+            src/uwvm2/utils/security
+            third-parties/openssl
+            tools/dependencies
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.8'
           cache: false
-      - name: Build and execute native signature tests
+      - name: Build prerequisites
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install -y g++ pkg-config perl make python3
+          else
+            brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
+          fi
+      - name: Build and execute target tests
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TARGET: ${{ matrix.target }}
-          WSEA_OPENSSL_JOBS: '3'
         run: |
-          brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
-          python3 scripts/build_wsea_release.py --version "$RELEASE_VERSION" \
-            --target "$RELEASE_TARGET" --work "$RUNNER_TEMP/wsea-release" \
-            --output "$RUNNER_TEMP/release-assets"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          command=(python3 scripts/build_wsea_release.py --version "$RELEASE_VERSION" \
+            --target "$RELEASE_TARGET" --work "$PWD/.tmp/native/work" --output "$PWD/.tmp/native/assets")
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo systemd-run --unit="wsea-native-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
+              --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+              --property=TasksMax=512 --property=CPUQuota=200% /usr/bin/env PATH="$PATH" HOME="$HOME" \
+              UWVM2_ROOT="$UWVM2_ROOT" TMPDIR="$TMPDIR" GOTMPDIR="$GOTMPDIR" GOCACHE="$GOCACHE" \
+              GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3 PYTHONDONTWRITEBYTECODE=1 "${command[@]}"
+          else
+            "${command[@]}"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ matrix.target }}
-          path: ${{ runner.temp }}/release-assets/*
+          name: wsea-native-${{ matrix.target }}
+          path: .tmp/native/assets/*.tar.xz
           if-no-files-found: error
           retention-days: 7

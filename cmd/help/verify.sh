@@ -17,13 +17,15 @@
 set -e
 
 make bundled-openssl
-export PKG_CONFIG_PATH="${WSEA_OPENSSL_ROOT:-$PWD/.wsea-build/openssl}/pkgconfig"
+export PKG_CONFIG_PATH="${WSEA_OPENSSL_ROOT:-$PWD/.tmp/wsea-build/openssl}/pkgconfig"
 export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
 export PKG_CONFIG_SYSROOT_DIR=
-export CGO_CPPFLAGS="${CGO_CPPFLAGS:-} $(cat "${WSEA_OPENSSL_ROOT:-$PWD/.wsea-build/openssl}/cgo-cppflags")"
+export CGO_CPPFLAGS="${CGO_CPPFLAGS:-} $(cat "${WSEA_OPENSSL_ROOT:-$PWD/.tmp/wsea-build/openssl}/cgo-cppflags")"
 
 # Verify that generated Markdown docs are up-to-date.
-tmpdir=$(mktemp -d)
+umask 077
+mkdir -p .tmp
+tmpdir=$(mktemp -d "$PWD/.tmp/docgen.XXXXXXXX")
 trap 'rm -rf "$tmpdir"' EXIT
 go run ./cmd/help --dir "$tmpdir"
 echo "###########################################"

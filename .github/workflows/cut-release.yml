@@ -1,49 +1,90 @@
-#
-# Copyright 2024 The Sigstore Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-name: Cut Release
+name: WSEA release
 
 on:
+  push:
+    tags: ['v*.*.*']
   workflow_dispatch:
-    inputs:
-      release_tag:
-        required: true
-        type: string
-        description: 'Release tag'
-      key_ring:
-        required: true
-        type: string
-        description: 'Key ring for cosign key'
-      key_name:
-        required: true
-        type: string
-        description: 'Key name for cosign key'
 
-concurrency: cut-release
+permissions:
+  contents: read
+
+concurrency:
+  group: wsea-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  cut-release:
-    name: Cut release
-    uses: sigstore/community/.github/workflows/reusable-release.yml@main
-    permissions:
-      id-token: write
-      contents: read
+  admission:
+    if: github.repository == 'UlteSoft/wasm-cosign'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      revision: ${{ steps.tag.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: tag
+        name: Require an immutable version tag on main history
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PYCODE'
+          import os, re, subprocess
+          ref = os.environ['RELEASE_REF']
+          assert re.fullmatch(r'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+', ref), 'select a release tag, never a branch'
+          rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          subprocess.run(['git', 'merge-base', '--is-ancestor', rev, 'origin/main'], check=True)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('version=' + ref.removeprefix('refs/tags/') + '\nrevision=' + rev + '\n')
+          PYCODE
+      - name: Check bilingual documentation
+        run: python3 scripts/check_wsea_docs.py
+  wasm:
+    needs: admission
+    uses: ./.github/workflows/wsea-ci.yml
     with:
-      release_tag: ${{ github.event.inputs.release_tag }}
-      key_ring: ${{ github.event.inputs.key_ring }}
-      key_name: ${{ github.event.inputs.key_name }}
-      workload_identity_provider: 'projects/498091336538/locations/global/workloadIdentityPools/githubactions/providers/sigstore-cosign'
-      service_account: 'github-actions-cosign@projectsigstore.iam.gserviceaccount.com'
-      repo: 'cosign'
+      version: ${{ needs.admission.outputs.version }}
+  native:
+    needs: admission
+    uses: ./.github/workflows/wsea-release-assets.yml
+    with:
+      version: ${{ needs.admission.outputs.version }}
+  publish:
+    needs: [admission, wasm, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: wsea-*
+          merge-multiple: true
+          path: .tmp/release
+      - name: Validate complete production archives
+        env:
+          RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+          RELEASE_REVISION: ${{ needs.admission.outputs.revision }}
+        run: |
+          python3 scripts/validate_wsea_release.py --assets .tmp/release \
+            --version "$RELEASE_VERSION" --revision "$RELEASE_REVISION"
+          python3 scripts/wsea_release_notes.py "$RELEASE_VERSION" > .tmp/release-notes.md
+      - name: Publish only after every qualification succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+        run: |
+          # Never overwrite a published release or replace its attachments.
+          if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo 'Release already exists; inspect it before creating a new version.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_VERSION" --verify-tag --draft \
+            --title "wasm-cosign $RELEASE_VERSION — WSEA" --notes-file .tmp/release-notes.md
+          gh release upload "$RELEASE_VERSION" .tmp/release/*.tar.xz .tmp/release/SHA256SUMS
+          gh release edit "$RELEASE_VERSION" --draft=false --latest

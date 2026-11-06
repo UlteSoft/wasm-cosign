@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from prepare_wsea_openssl import load_builder
+from wsea_documents import DOCUMENTS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -140,13 +141,18 @@ def main():
     goroot = Path(subprocess.check_output([a.go, 'env', 'GOROOT'], text=True).strip())
     shutil.copyfile(goroot / 'lib/wasm/wasm_exec.js', artifacts / 'wasm_exec.js')
     shutil.copyfile(ROOT / 'wasm/LICENSE-Go', artifacts / 'LICENSE-Go')
-    for name in ('loader.mjs', 'run-json.mjs', 'run.py', 'README.md'):
+    for name in ('loader.mjs', 'run-json.mjs', 'run.py'):
         if (ROOT / 'wasm' / name).exists():
             shutil.copyfile(ROOT / 'wasm' / name, artifacts / name)
+    for name in DOCUMENTS:
+        destination = artifacts / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, destination)
     shutil.copyfile(ROOT / 'LICENSE', artifacts / 'LICENSE')
     shutil.copyfile(ROOT / 'third_party/openssl/upstream/LICENSE.txt', artifacts / 'LICENSE-OpenSSL')
     (out / 'wasm-receipt.json').write_text(json.dumps({'identity': identity, 'source_files': source_hashes(),
-        'artifacts': {v.name: digest(v) for v in artifacts.iterdir() if v.is_file()}}, indent=2) + '\n')
+        'artifacts': {str(v.relative_to(artifacts)): digest(v) for v in sorted(artifacts.rglob('*'))
+                      if v.is_file()}}, indent=2) + '\n')
     print('PASS: shared WSEA, pinned OpenSSL, WASIp1-only, strict MVP validation', flush=True)
 
 

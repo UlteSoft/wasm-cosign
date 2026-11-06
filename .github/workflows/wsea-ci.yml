@@ -1,0 +1,87 @@
+name: WSEA CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wsea-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  portable:
+    name: WASIp1 / Node / real UWVM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select immutable counterpart and private temporary space
+        run: |
+          umask 077
+          mkdir -p .tmp/tmp
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          rev = pathlib.Path('scripts/wsea_uwvm_revision.txt').read_text().strip()
+          assert re.fullmatch('[a-f0-9]{40}', rev)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('UWVM_REVISION=' + rev + '\n')
+          PYCODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: UlteSoft/uwvm2-ros
+          ref: ${{ env.UWVM_REVISION }}
+          path: .tmp/uwvm
+          persist-credentials: false
+          sparse-checkout: |
+            src
+            third-parties/fast_io
+            third-parties/bizwen
+            third-parties/boost_unordered
+            third-parties/openssl
+            tools/dependencies
+            test/0073.ros-tests/support/source/security_wsea
+            test/0073.ros-tests/support/source/ros_cgroup
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.22.3'
+      - name: Native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 pkg-config perl make python3 xz-utils
+      - name: Build and qualify inside a 64 GiB zero-swap cgroup
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          args=()
+          if [ -n "$RELEASE_VERSION" ]; then args+=(--version "$RELEASE_VERSION"); fi
+          sudo systemd-run --unit="wsea-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" \
+            --working-directory="$PWD" --property=MemoryMax=64G --property=MemoryHigh=6G \
+            --property=MemorySwapMax=0 --property=TasksMax=512 --property=CPUQuota=200% \
+            /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/ci_wsea.py --uwvm-root .tmp/uwvm --tools .tmp/tools \
+              --work .tmp/qualification --fetch-tools "${args[@]}"
+      - name: Upload only qualified release archives
+        if: inputs.version != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wsea-portable-release
+          path: .tmp/qualification/release/*.tar.xz
+          if-no-files-found: error
+          retention-days: 7
