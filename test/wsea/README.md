@@ -3,10 +3,18 @@
 The default product now uses the shared native UWVM core. Build with CGO and
 a matching bundled OpenSSL 3.5.9 toolchain; see [build requirements](../../doc/wsea-build.md).
 The cross-target driver now requires explicit `--native-toolchains`; there is no pure-Go fallback.
-Local `/tmp` qualification is also supported when explicitly authorized.
+Local qualification uses the project's ignored `.tmp` directory when explicitly authorized.
 
-Run candidate builds and tests only inside the authorized SSH Linux cgroup,
+Run candidate builds and tests only inside the authorized 64 GiB, zero-swap Linux cgroup,
 with bounded process ownership, memory, temporary storage and execution time.
+
+The portable SDK is described in [wasm/README.md](../../wasm/README.md).
+`wasm_interop.py` runs the full shared corpus in Wasmtime, Node.js and UWVM;
+`wasm_signing.py` exercises all profiles in both signing directions, eight-key
+quorums and real secure execution; `wasm_host_security.py` checks protected file
+paths, concurrent policy replacement and CSPRNG failure with real WASM.
+Keep all generated fixtures, keys, logs and reports under `.tmp`; they are never
+release inputs. Native and WASM code paths share the frozen WSEA wire profile.
 
 ```sh
 make bundled-openssl

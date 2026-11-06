@@ -45,6 +45,7 @@ __pycache__/
 # Source-owned OpenSSL includes upstream fixtures named signature and *.out.
 !third_party/openssl/upstream/**
 /.wsea-build/
+/.tmp/
 
 # Generated local qualification output never belongs in source releases.
 /test/wsea/*results*/

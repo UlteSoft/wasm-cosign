@@ -1,3 +1,5 @@
+//go:build !wasm
+
 // Copyright 2026 The Sigstore Authors.
 // Licensed under the Apache License, Version 2.0.
 #include "bridge.h"
@@ -15,7 +17,9 @@ extern "C" wsea_result wsea_verify_evidence(wsea_bytes cose, wsea_bytes certific
     wsea_bytes crls, wsea_bytes roots, wsea_bytes pin, int64_t now, uint64_t max_age)
 {
     namespace wsea = uwvm2::utils::security::wsea;
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
     try
+#endif
     {
         auto view = [](wsea_bytes b) { return std::string_view{b.data ? b.data : "", b.size}; };
         if(!cose.data || cose.size>65536 ||
@@ -52,6 +56,8 @@ extern "C" wsea_result wsea_verify_evidence(wsea_bytes cose, wsea_bytes certific
         if(result && signer.size()==64) { std::memcpy(output.signer,signer.data(),64); output.valid_until=expiry; }
         return output;
     }
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
     catch(...)
     { return {"SIG_005","Native WSEA verifier failed"}; }
+#endif
 }

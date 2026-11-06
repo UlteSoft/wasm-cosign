@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           umask 077
-          CGO_ENABLED=1 go test -covermode atomic -coverprofile coverage.txt ./cmd/cosign ./internal/wasmcli ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
+          CGO_ENABLED=1 go test -covermode atomic -coverprofile coverage.txt ./cmd/cosign ./cmd/wasmcosign ./internal/wasmcli ./internal/wasmsdk ./internal/wseanative ./pkg/wasmsecure ./cmd/cosign/cli/wasmsecure
 
       - name: Upload Coverage Report
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1

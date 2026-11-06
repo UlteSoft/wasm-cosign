@@ -9,19 +9,23 @@
 #include <ctime>
 #include <limits>
 #include <memory>
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
 #include <mutex>
+#endif
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#if defined(UWVM_WSEA_OPENSSL) && (defined(__unix__) || defined(__APPLE__))
+#if defined(UWVM_WSEA_OPENSSL) && (defined(__unix__) || defined(__APPLE__) || defined(UWVM_WSEA_CRYPTO_ONLY))
 #define UWVM_WSEA_SUPPORTED 1
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 #include <openssl/bn.h>
 #include <openssl/core_names.h>
 #include <openssl/ecdsa.h>
@@ -51,6 +55,13 @@ namespace uwvm2::utils::security::wsea
         using digest = ::std::array<unsigned char, 32>;
         template<typename T, auto Free> struct deleter { void operator()(T* p) const noexcept { if(p) { Free(p); } } };
         template<typename T, auto Free> using owned = ::std::unique_ptr<T, deleter<T, Free>>;
+        // Memory-only deployment adapter. It cannot issue execution receipts or
+        // access persistent trust/state. Only single-threaded WASM may select it.
+#if defined(UWVM_WSEA_CRYPTO_ONLY)
+#if !defined(__wasm__) || defined(__wasm_atomics__)
+#error The memory-only WSEA adapter requires single-threaded WebAssembly.
+#endif
+#else
         struct fd
         {
             int value{-1};
@@ -64,6 +75,7 @@ namespace uwvm2::utils::security::wsea
             ~fd() { if(value >= 0) { ::close(value); } }
             explicit operator bool() const noexcept { return value >= 0; }
         };
+#endif
         inline bool hash(void const* data, ::std::size_t size, digest& out) noexcept
         {
             unsigned int n{};
@@ -128,6 +140,7 @@ namespace uwvm2::utils::security::wsea
             for(unsigned char c : p) { if(c < 32 || c == 127) { return false; } }
             return true;
         }
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
         inline ::std::string normalize(::std::string_view p)
         {
             if(!path_text(p)) { return {}; }
@@ -201,6 +214,7 @@ namespace uwvm2::utils::security::wsea
             fd file{::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)};
             return file && read_fd(file.value, limit, out);
         }
+#endif
         enum class signature_kind { ecdsa, ed25519, rsa_pss, rsa_pkcs1 };
         struct signature_profile
         {
@@ -271,6 +285,7 @@ namespace uwvm2::utils::security::wsea
             ::std::string config_path, root_path, state_path, root_pem, fingerprint;
             ::std::vector<rule> rules;
         };
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
         inline result load_policy(::std::string_view path, ::std::shared_ptr<policy const>& output)
         {
             auto p{::std::make_shared<policy>()};
@@ -342,6 +357,7 @@ namespace uwvm2::utils::security::wsea
         inline ::std::mutex registry_mutex;
         inline ::std::vector<selection> selections;
         inline ::std::shared_ptr<policy const> default_policy;
+#endif
 
         // Only a fixed deterministic CBOR subset is accepted: no maps other than
         // the exact protected header, no indefinite lengths or non-minimal integers.
@@ -614,18 +630,24 @@ namespace uwvm2::utils::security::wsea
         }
         struct rsa_public_validation_cache
         {
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
             ::std::mutex mutex;
+#endif
             ::std::array<digest,64> identities{};
             ::std::size_t count{}, next{};
             bool contains(digest const& identity) noexcept
             {
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
                 ::std::lock_guard lock{mutex};
+#endif
                 for(::std::size_t i{};i<count;++i) { if(identities[i]==identity) { return true; } }
                 return false;
             }
             void remember(digest const& identity) noexcept
             {
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
                 ::std::lock_guard lock{mutex};
+#endif
                 for(::std::size_t i{};i<count;++i) { if(identities[i]==identity) { return; } }
                 if(count<identities.size()) { identities[count++]=identity; }
                 else { identities[next]=identity; next=(next+1)%identities.size(); }
@@ -821,6 +843,9 @@ namespace uwvm2::utils::security::wsea
         inline result verify_crypto(policy const& p, manifest const& m, ::std::string_view certificate_pem,
                                     ::std::string_view crl_pem, ::std::time_t now, ::std::uint64_t& valid_until, ::std::string& signer_identity)
         {
+#if defined(UWVM_WSEA_CRYPTO_ONLY)
+            static_assert(!ReadRevocationMemory, "Memory-only adapter cannot authorize execution or access VM state");
+#endif
             ::std::vector<::std::string_view> roots, certs, crls;
             if(!pem_blocks(p.root_pem,"CERTIFICATE",roots) || roots.size()>16) { return deny("CERT_001","Malformed trust anchors"); }
             if(!pem_blocks(certificate_pem,"CERTIFICATE",certs) || certs.size()>16) { return deny("CERT_002","Malformed signer chain"); }
@@ -1045,6 +1070,7 @@ namespace uwvm2::utils::security::wsea
             return {};
         }
 
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
         // A previously authenticated revocation is a protected security fact.
         // Never let a downloader undo it by replaying an older, still-fresh
         // issuer CRL. This strict profile retires the release key permanently;
@@ -1184,8 +1210,10 @@ namespace uwvm2::utils::security::wsea
             if(::fsync(dir.value)!=0) { return deny("POL_001","Rollback state durability could not be established"); }
             return {};
         }
+#endif
     }
 
+#if !defined(UWVM_WSEA_CRYPTO_ONLY)
     class verified_module
     {
         ::std::byte const* bytes_{};
@@ -1364,6 +1392,7 @@ namespace uwvm2::utils::security::wsea
         ::std::shared_ptr<detail::policy const> p; auto configured{detail::load_policy(policy_path,p)};
         return configured ? verify_with_policy(::std::move(p),path,bytes,size) : configured;
     }
+#endif // !UWVM_WSEA_CRYPTO_ONLY
 #else
     class verified_module
     {

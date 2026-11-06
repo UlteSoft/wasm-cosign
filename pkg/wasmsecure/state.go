@@ -15,6 +15,10 @@ import (
 
 const BootstrapState = "UWVM-WSEA-STATE-1\n0 0 -\n"
 
+// ValidUntil is the exclusive expiry of all authenticated evidence. It is zero
+// before verification. Host adapters must recheck it immediately before use.
+func (m Manifest) ValidUntil() uint64 { return m.validUntil }
+
 // CheckState consults the VM's protected monotonic state without changing it.
 // The VM rechecks and atomically advances this state when authorizing execution.
 func CheckState(policyBytes, rootBytes []byte, p Policy, m Manifest, now time.Time) error {
@@ -71,6 +75,39 @@ func checkState(policyBytes, rootBytes []byte, p Policy, m Manifest, now time.Ti
 			}
 		}
 	}
+	return checkStateData(policyBytes, rootBytes, p, m, b, now, observeCurrent)
+}
+
+// CheckStateSnapshot applies the same native rollback/expiry parser to an
+// independently protected host snapshot. The caller must authenticate the state
+// and the complete revocation-marker set, then recheck freshness before use.
+// This does not provision trust, persist state or authorize VM execution.
+func CheckStateSnapshot(policyBytes, rootBytes []byte, p Policy, m Manifest, state []byte, revokedSPKIs []string, checkedAt time.Time) error {
+	if len(state) == 0 || len(state) > 1<<20 || state[len(state)-1] != '\n' || revokedSPKIs == nil {
+		return errors.New("POL_002: missing or malformed protected state snapshot")
+	}
+	rule, ok := p.Modules[m.ModuleID]
+	if !ok {
+		return errors.New("CERT_006: unknown module in state check")
+	}
+	pins := m.SignerSPKIs
+	if len(pins) == 0 {
+		pins = []string{rule.SPKI}
+	}
+	for _, pin := range pins {
+		if !rule.AllowsSigner(pin) {
+			return errors.New("CERT_006: state check signer is not authorized")
+		}
+		for _, revoked := range revokedSPKIs {
+			if pin == revoked {
+				return errors.New("CERT_004: publisher key has a protected permanent revocation marker")
+			}
+		}
+	}
+	return checkStateData(policyBytes, rootBytes, p, m, state, checkedAt, true)
+}
+
+func checkStateData(policyBytes, rootBytes []byte, p Policy, m Manifest, b []byte, now time.Time, observeCurrent bool) error {
 	lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 	if len(lines) < 2 || lines[0] != "UWVM-WSEA-STATE-1" {
 		return errors.New("POL_002: invalid security state")
