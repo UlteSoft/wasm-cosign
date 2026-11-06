@@ -116,7 +116,12 @@ jobs:
       - name: QEMU virtual machine prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage python3 openssh-client
+          sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage python3 openssh-client acl
+          # Grant only this disposable runner user access to hardware acceleration.
+          # Do not silently spend the build timeout in software emulation.
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
       - name: Build and execute inside FreeBSD
         env:
           RELEASE_VERSION: ${{ inputs.version }}
@@ -126,7 +131,7 @@ jobs:
             --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
             --property=TasksMax=512 --property=CPUQuota=200% \
             /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
-            python3 scripts/ci_wsea_freebsd.py --version "$RELEASE_VERSION" \
+            python3 scripts/ci_wsea_freebsd.py --require-kvm --version "$RELEASE_VERSION" \
               --source-root .tmp/release-source --uwvm-root .tmp/uwvm --work .tmp/freebsd
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

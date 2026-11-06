@@ -67,6 +67,13 @@ installed only inside its disposable overlay. The guest build uses an unprivileg
 account and SSH binds to host loopback. No persistent VM or persistent self-hosted
 runner is required.
 
+The hosted FreeBSD job grants only its disposable runner user access to `/dev/kvm`
+and passes `--require-kvm`. It fails immediately if hardware acceleration is
+unavailable, instead of silently exhausting the build timeout under TCG. The
+guest's build stages are streamed to the CI console; private transcripts remain
+under `.tmp` and are not uploaded as artifacts. The standalone driver can still
+use TCG when `--require-kvm` is omitted; all qualification checks remain mandatory.
+
 Linux compiler/sysroot packages are SHA-256-pinned in
 `scripts/wsea_cross_toolchains.json`. Debian/Ubuntu packages are extracted into
 private directories without installing them on the host. The musl SDK retains

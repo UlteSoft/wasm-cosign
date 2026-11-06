@@ -52,6 +52,11 @@ MIPS64 使用 n64 硬件浮点 ABI。macOS 与 FreeBSD 静态链接内置 OpenSS
 cgroup。官方 15.1 镜像与 Go 1.26.8 归档均固定 SHA-256，客体依赖仅安装到一次性磁盘叠加层。
 客体构建使用普通用户，SSH 仅绑定宿主回环地址；不需要持久虚拟机或持久自托管 runner。
 
+托管 FreeBSD 任务只为本次临时 runner 用户授予 `/dev/kvm` 访问权限，并传入 `--require-kvm`。
+缺少硬件加速时立即失败，避免静默使用 TCG 后耗尽构建时限。客体构建阶段会实时显示在 CI 控制台，
+私有日志仍保存在 `.tmp` 内，不作为 artifact 上传。独立运行脚本时省略 `--require-kvm` 仍可使用
+TCG；全部资格验证检查依然必须通过。
+
 Linux 编译器和 sysroot 软件包的 SHA-256 固定在 `scripts/wsea_cross_toolchains.json`。
 Debian／Ubuntu 软件包只解压到私有目录，不安装到宿主系统。musl SDK 保留不安全宿主路径检查；
 通过在私有目录复制相同的 Go 工具链，避免使用宿主 `/usr` 下的包含路径。

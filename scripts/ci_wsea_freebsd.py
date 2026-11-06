@@ -43,11 +43,16 @@ def main():
     p.add_argument('--source-root', type=Path, required=True)
     p.add_argument('--uwvm-root', type=Path, required=True)
     p.add_argument('--work', type=Path, required=True)
+    p.add_argument('--require-kvm', action='store_true', help='fail before downloading if hardware acceleration is unavailable')
     p.add_argument('--qemu-data', type=Path, help='private QEMU firmware directory, if not installed system-wide')
     p.add_argument('--bios', type=Path, help='explicit SeaBIOS path for a private QEMU installation')
     a = p.parse_args()
     if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', a.version):
         p.error('explicit immutable semantic release tag required')
+    kvm = os.access('/dev/kvm', os.R_OK | os.W_OK)
+    if a.require_kvm and not kvm:
+        p.error('KVM read/write access is required for this qualification runner')
+    print('FreeBSD QEMU acceleration: ' + ('kvm' if kvm else 'tcg'), flush=True)
     source, counterpart, work = a.source_root.resolve(), a.uwvm_root.resolve(), private_path(a.work)
     work.mkdir(parents=True, exist_ok=False)
     private_environment(work)
@@ -60,12 +65,14 @@ def main():
             raise RuntimeError('clean pinned product/counterpart checkout required')
     image = download(IMAGE_URL, IMAGE_SHA, work / 'image.qcow2.xz')
     go = download(GO_URL, GO_SHA, work / 'go.tar.gz')
+    print('PASS: pinned FreeBSD image and Go toolchain', flush=True)
     with lzma.open(image) as src, (work / 'base.qcow2').open('xb') as dest:
         shutil.copyfileobj(src, dest, 1 << 20)
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b',
                     str(work / 'base.qcow2'), str(work / 'overlay.qcow2'), '24G'], check=True)
     source_tar = snapshot(source, work / 'source', a.version)
     counterpart_tar = snapshot(counterpart, work / 'uwvm')
+    print('PASS: self-contained product and counterpart snapshots', flush=True)
     key = work / 'ssh-key'
     subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(key)], check=True)
     seed = work / 'seed'
@@ -90,7 +97,6 @@ def main():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = str(sock.getsockname()[1])
-    kvm = os.access('/dev/kvm', os.R_OK | os.W_OK)
     command = ['qemu-system-x86_64', '-machine', 'q35,accel=' + ('kvm' if kvm else 'tcg'),
                '-cpu', 'host' if kvm else 'max', '-smp', '2', '-m', '4096', '-vga', 'none',
                '-drive', 'file=' + str(work / 'overlay.qcow2') + ',if=virtio,format=qcow2',
@@ -120,6 +126,7 @@ def main():
                 time.sleep(10)
             else:
                 raise RuntimeError('FreeBSD prerequisites did not become ready')
+            print('PASS: FreeBSD first-boot prerequisites', flush=True)
             for file, name in ((source_tar, 'source.tar.gz'), (counterpart_tar, 'uwvm.tar.gz'), (go, 'go.tar.gz')):
                 subprocess.run([*scp, str(file), 'wsea@127.0.0.1:/home/wsea/' + name], check=True, timeout=180)
             guest = '/home/wsea/wasm-cosign'
@@ -151,9 +158,17 @@ tar -xJf .tmp/native/assets/x86_64-freebsd15-wasm-cosign-{a.version}.tar.xz -C .
             script_path = work / 'build.sh'
             script_path.write_text(script)
             subprocess.run([*scp, str(script_path), 'wsea@127.0.0.1:/home/wsea/build.sh'], check=True)
-            with (work / 'build.log').open('w') as build_log:
-                subprocess.run([*ssh, '/bin/sh /home/wsea/build.sh'], stdout=build_log,
-                               stderr=subprocess.STDOUT, check=True, timeout=2400)
+            # Keep the private transcript while showing actual guest build stages
+            # in the job console. A timeout must not hide the stage that stalled.
+            with subprocess.Popen(['tee', str(work / 'build.log')], stdin=subprocess.PIPE) as transcript:
+                try:
+                    subprocess.run([*ssh, '/bin/sh /home/wsea/build.sh'], stdout=transcript.stdin,
+                                   stderr=subprocess.STDOUT, check=True, timeout=2400)
+                finally:
+                    transcript.stdin.close()
+                    transcript.wait(timeout=10)
+                if transcript.returncode:
+                    raise RuntimeError('failed to record the FreeBSD build transcript')
             assets = work / 'assets'
             assets.mkdir()
             name = 'x86_64-freebsd15-wasm-cosign-' + a.version + '.tar.xz'
@@ -165,6 +180,12 @@ tar -xJf .tmp/native/assets/x86_64-freebsd15-wasm-cosign-{a.version}.tar.xz -C .
                 'uwvm_revision': expected_partner, 'archive_sha256': sha(assets / name),
                 'image_sha256': IMAGE_SHA, 'go_sha256': GO_SHA, 'acceleration': 'kvm' if kvm else 'tcg'}, indent=2) + '\n')
             print('PASS: actual FreeBSD source build, product tests and packaged executable', flush=True)
+        except Exception:
+            for name in ('qemu.log', 'serial.log'):
+                path = work / name
+                if path.is_file():
+                    sys.stderr.write('\nFreeBSD diagnostic: ' + name + '\n' + path.read_text(errors='replace')[-12000:])
+            raise
         finally:
             vm.terminate()
             try:
