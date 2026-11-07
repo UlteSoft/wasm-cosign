@@ -9,4 +9,4 @@ Local Web GUI for wasm-cosign: signing, verification, multisignatures, HTTPS ret
 python3 webgui/server.py --binary /absolute/path/to/cosign
 ```
 
-Requires Python 3.10+ and an existing native wasm-cosign executable. Open the session link printed in the terminal.
+Requires Python 3.10+, an existing native wasm-cosign executable, and a local desktop with Zenity (Linux) or Python Tk file dialogs. Open the session link printed in the terminal.

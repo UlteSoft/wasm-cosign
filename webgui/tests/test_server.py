@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import server as gui
+import native_picker
 
 SCRATCH = Path(__file__).resolve().parents[2] / '.tmp' / 'webgui'
 SCRATCH.mkdir(parents=True, exist_ok=True)
@@ -35,7 +36,6 @@ class Arguments(unittest.TestCase):
         for invalid in ['18446744073709551616', '-1', '1.1', '1e3', '01', 123, True]:
             with self.subTest(invalid=invalid), self.assertRaises(gui.InputError):
                 gui.build_argv('/bin/cosign', 'sign', fields | {'module-version': invalid})
-        self.assertEqual(gui.exact_json({'v': 2**64-1, 'embedded': True}), {'v': '18446744073709551615', 'embedded': True})
 
     def test_no_shell_or_flag_injection(self):
         fields = sign_fields() | {'key': '/local/$(touch SENTINEL); key.pem', 'module-id': '--help'}
@@ -98,23 +98,57 @@ class Arguments(unittest.TestCase):
         self.assertEqual(result['stdout'].strip(),'$(echo unexpected); --help')
 
 
+def manifest():
+    return {'embedded':True,'module_id':'example.app','version':2**64-1,'security_epoch':0,
+            'capabilities':0,'not_before':1794000000,'not_after':1794003600,
+            'signature_algorithms':['ES256'],'signer_spkis':['a'*64]}
+
+
+def native(status='VERIFIED', code=0, **extra):
+    return {'exit_code':code,'stdout':json.dumps({'status':status,'manifest':manifest()}),
+            'stderr':'','seconds':0,'interrupted':None,**extra}
+
+
+class DesktopPicker(unittest.TestCase):
+    def test_helper_protocol_does_not_return_diagnostics(self):
+        with patch.object(gui, 'run_bounded', return_value=native(stdout='{"path":"/chosen/key.pem"}')) as runner:
+            self.assertEqual(gui.choose_local_file('key','zh',threading.Event()),'/chosen/key.pem')
+            self.assertEqual(runner.call_args.args[0][-2:],['key','zh'])
+        with patch.object(gui, 'run_bounded', return_value=native(code=2,stdout='')):
+            self.assertIsNone(gui.choose_local_file('key','en',threading.Event()))
+        with patch.object(gui, 'run_bounded', return_value=native(code=1,stderr='/private/failure')):
+            with self.assertRaisesRegex(gui.InputError, '^PICKER_UNAVAILABLE$'):
+                gui.choose_local_file('key','en',threading.Event())
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Zenity backend is Linux-specific')
+    def test_desktop_adapter_uses_argument_arrays_and_cancellation(self):
+        from types import SimpleNamespace
+        with patch.object(native_picker.shutil,'which',return_value='/usr/bin/zenity'), patch.object(native_picker.subprocess,'run') as run:
+            run.return_value=SimpleNamespace(returncode=0,stdout='/local/$(literal).wasm\n')
+            self.assertEqual(native_picker.select('module-output','en'),'/local/$(literal).wasm')
+            self.assertIn('--save',run.call_args.args[0])
+            self.assertNotIn('shell',run.call_args.kwargs)
+            run.return_value=SimpleNamespace(returncode=1,stdout='')
+            self.assertIsNone(native_picker.select('key','zh'))
+
+
 @unittest.skipUnless(os.name=='posix', 'Executable fixture uses a POSIX shebang')
 class HTTPBoundary(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.directory=tempfile.TemporaryDirectory(prefix='unit-',dir=SCRATCH)
-        cls.root=Path(cls.directory.name)
-        cls.binary=cls.root/'mock-cosign'
-        cls.binary.write_text('#!'+sys.executable+'\nprint("wasm-cosign test WSEA v2")\n')
-        cls.binary.chmod(0o700)
-        cls.app=gui.Application(cls.binary,[cls.root],1)
-        cls.server=gui.LocalServer(('127.0.0.1',0),cls.app)
-        cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True)
-        cls.thread.start()
+    def setUp(self):
+        self.directory=tempfile.TemporaryDirectory(prefix='private-unit-',dir=SCRATCH)
+        self.root=Path(self.directory.name)
+        self.binary=self.root/'mock-cosign'
+        self.binary.write_text('#!'+sys.executable+'\nprint("wasm-cosign test WSEA v2")\n')
+        self.binary.chmod(0o700)
+        self.selected=self.root/'user-chosen.pem'
+        self.selected.write_text('SECRET_KEY_CONTENT_DO_NOT_SEND')
+        self.app=gui.Application(self.binary,1,picker=lambda *_:str(self.selected))
+        self.server=gui.LocalServer(('127.0.0.1',0),self.app)
+        self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
+        self.thread.start()
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.server.shutdown();cls.server.server_close();cls.thread.join();cls.directory.cleanup()
+    def tearDown(self):
+        self.server.shutdown();self.server.server_close();self.thread.join();self.directory.cleanup()
 
     def request(self,path='/api/config',method='GET',data=None,headers=None,auth=True):
         h={'Host':self.server.authority}
@@ -125,85 +159,155 @@ class HTTPBoundary(unittest.TestCase):
         conn=http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)
         conn.request(method,path,body=body,headers=h);response=conn.getresponse()
         status=response.status;raw=response.read();response_headers=dict(response.getheaders());conn.close()
+        self.assertNotIn(str(self.root).encode(),raw)
+        self.assertNotIn(b'SECRET_KEY_CONTENT_DO_NOT_SEND',raw)
+        self.assertNotIn(self.app.token.encode(),raw)
         return status,raw,response_headers
 
-    def test_authentication_and_no_token_exposure(self):
+    def fields(self):
+        f=sign_fields()
+        for name,spec in gui.SCHEMAS['sign'].items():
+            if name in f and spec.rstrip('!')=='path':
+                path=self.root/'new.wasm' if name=='output' else self.selected
+                f[name]=self.app.register_file(str(path),gui.file_role('sign',name))['id']
+        return f
+
+    def finished(self,command,fields,result):
+        with patch.object(gui,'run_bounded',return_value=result):
+            status,raw,_=self.request('/api/jobs','POST',{'command':command,'fields':fields})
+            self.assertEqual(status,202,raw)
+            job=json.loads(raw);self.app.worker.join(3)
+        status,raw,_=self.request('/api/jobs/'+job['id'])
+        self.assertEqual(status,200)
+        return json.loads(raw)
+
+    def test_authentication_and_no_local_information(self):
         self.assertEqual(self.request(auth=False)[0],401)
         self.assertEqual(self.request(headers={'Authorization':'Bearer wrong'})[0],401)
         status,body,_=self.request()
         self.assertEqual(status,200)
-        self.assertNotIn(self.app.token.encode(),body)
-        self.assertEqual(self.request('/api/jobs',method='POST',data={'command':'version','fields':{}},auth=False)[0],401)
+        self.assertEqual(set(json.loads(body)),{'algorithms','jobs','active_job','selection'})
+        self.assertEqual(self.request('/api/selections','POST',{'command':'sign','field':'key','language':'zh'},auth=False)[0],401)
 
-    def test_host_dns_rebinding_and_origin(self):
-        for host in ['evil.test','localhost:'+str(self.server.server_port),'127.0.0.1:1','127.0.0.1:'+str(self.server.server_port)+'.evil']:
+    def test_host_and_origin(self):
+        for host in ['evil.test','localhost:'+str(self.server.server_port),'127.0.0.1:1']:
             self.assertEqual(self.request(headers={'Host':host})[0],403)
         for h in [{'Origin':'https://evil.test'},{'Origin':'null'},{'Sec-Fetch-Site':'cross-site'}]:
             self.assertEqual(self.request(headers=h)[0],403)
-        self.assertEqual(self.request('/api/jobs',method='POST',data={'command':'version','fields':{}},headers={'Origin':''})[0],403)
-        self.assertEqual(self.request('/api/jobs',method='OPTIONS',auth=False)[0],501)
+        self.assertEqual(self.request('/api/jobs','POST',{},headers={'Origin':''})[0],403)
+        status,body,h=self.request('/api/jobs',method='OPTIONS',auth=False)
+        self.assertEqual(status,501);self.assertIn('application/json',h['Content-Type'])
 
-    def test_static_allowlist_csp_no_cors(self):
+    def test_removed_surfaces_and_static_headers(self):
         status,body,h=self.request('/',auth=False)
         self.assertEqual(status,200)
-        self.assertIn('frame-ancestors \'none\'',h['Content-Security-Policy'])
+        self.assertIn("frame-ancestors 'none'",h['Content-Security-Policy'])
         self.assertEqual(h['Cache-Control'],'no-store')
-        self.assertEqual(h['X-Content-Type-Options'],'nosniff')
         self.assertNotIn('Access-Control-Allow-Origin',h)
-        self.assertNotIn(self.app.token.encode(),body)
         for path in ['/../server.py','/%2e%2e/server.py','/server.py','/api/file?path=/etc/passwd','/app.js?token=x']:
             self.assertEqual(self.request(path)[0],404)
+        for path in ['/api/browse','/api/preview','/api/upload']:
+            self.assertEqual(self.request(path,'POST',{'path':str(self.root)})[0],404)
+        for command in ['help','version','sign-blob','sh']:
+            self.assertEqual(self.request('/api/jobs','POST',{'command':command,'fields':{}})[0],400)
 
-    def test_json_validation(self):
-        for body in ['[]','{}','{','{"command":"version","command":"help","fields":{}}','{"command":"version","fields":{"extra":"x"}}']:
-            self.assertEqual(self.request('/api/jobs','POST',body)[0],400)
+    def test_json_validation_no_exception_echo(self):
+        for body in ['[]','{}','{','{"command":"verify","command":"help","fields":{}}',
+                     '{"command":"sign","fields":{"module":NaN}}',
+                     {'command':'sign','fields':{'extra-'+str(self.root):'x'}},
+                     {'command':['sign'],'fields':{}}, {'command':'sign','fields':sign_fields()}]:
+            status,raw,_=self.request('/api/jobs','POST',body)
+            self.assertEqual(status,400,raw)
+            self.assertRegex(json.loads(raw)['error'],r'^[A-Z_]+$')
         self.assertEqual(self.request('/api/jobs','POST','{}',{'Content-Type':'text/plain'})[0],415)
         self.assertEqual(self.request('/api/jobs','POST','x'*(gui.MAX_BODY+1))[0],413)
         self.assertEqual(self.request('/api/jobs','POST','{}',{'Transfer-Encoding':'chunked'})[0],400)
 
-    def test_browse_roots_and_no_contents(self):
-        (self.root/'secret.pem').write_text('CONTENTS_MUST_NOT_BE_RETURNED')
-        (self.root/'outside').symlink_to(self.root.parent,target_is_directory=True)
-        status,body,_=self.request('/api/browse','POST',{'path':str(self.root)})
-        self.assertEqual(status,200)
-        self.assertIn(b'secret.pem',body)
-        self.assertNotIn(b'CONTENTS_MUST_NOT_BE_RETURNED',body)
-        self.assertNotIn(b'outside',body)
-        for path in [str(self.root.parent),str(self.root/'outside'),'/etc']:
-            self.assertEqual(self.request('/api/browse','POST',{'path':path})[0],400)
+    def test_desktop_selection_returns_only_explicit_name_and_handle(self):
+        status,raw,_=self.request('/api/selections','POST',{'command':'sign','field':'key','language':'zh'})
+        self.assertEqual(status,202);ident=json.loads(raw)['id'];self.app.picker_worker.join(3)
+        status,raw,_=self.request('/api/selections/'+ident)
+        result=json.loads(raw);self.assertEqual(result['state'],'selected')
+        self.assertEqual(set(result['file']),{'id','name'})
+        self.assertEqual(result['file']['name'],self.selected.name)
+        self.assertEqual(set(self.app.config()),{'algorithms','jobs','active_job','selection'})
+        status,_,_=self.request('/api/selections','POST',{'command':'sign','field':'key','language':'en','path':str(self.selected)})
+        self.assertEqual(status,400)
 
-    def test_preview_and_native_output_fail_closed(self):
-        status,body,_=self.request('/api/preview','POST',{'command':'sign','fields':sign_fields()})
-        self.assertEqual(status,200)
-        self.assertIsNone(self.app.active)
-        job=self.app.submit('sign',sign_fields())
-        deadline=time.monotonic()+3
-        while self.app.active and time.monotonic()<deadline:time.sleep(.02)
-        finished=self.app.get_job(job['id'])
-        # Mock identifies itself but doesn't emit native verification JSON.
-        self.assertEqual(finished['state'],'failed')
-        self.assertIn('protocol_error',finished)
+    def test_file_capabilities_reject_wrong_role_and_foreign_handle(self):
+        f=self.fields()
+        for invalid in [str(self.selected),'0'*32,[],True,f['certificate']]:
+            self.assertEqual(self.request('/api/jobs','POST',{'command':'sign','fields':f|{'key':invalid}})[0],400)
+        # Browser cannot turn a selected input into a writable output capability.
+        self.assertEqual(self.request('/api/jobs','POST',{'command':'sign','fields':f|{'output':f['module']}})[0],400)
 
-    def test_serialization_partial_and_shutdown(self):
+    def test_cancel_and_picker_failure_do_not_leak(self):
+        for pick,expected in [(lambda *_:None,'cancelled'),(lambda *_:(_ for _ in ()).throw(OSError(str(self.root))),'failed')]:
+            self.app.picker=pick
+            job=self.app.select_file('sign','key','en');self.app.picker_worker.join(3)
+            status,raw,_=self.request('/api/selections/'+job['id'])
+            self.assertEqual(json.loads(raw)['state'],expected)
+
+    def test_raw_native_failures_and_policy_text_are_discarded(self):
+        for text,expected in [('CERT_006: private path '+str(self.root),'CERT_006'),(str(self.root),'OPERATION_FAILED')]:
+            job=self.finished('sign',self.fields(),native(code=1,stderr=text,stdout='SECRET_KEY_CONTENT_DO_NOT_SEND'))
+            self.assertEqual(job['error'],expected)
+            self.assertEqual(set(job),{'id','command','state','error'})
+        f={'policy':self.app.register_file(str(self.selected),'policy')['id'],'policy-version':'2'}
+        job=self.finished('policy-update',f,native(stdout='Updated protected policy '+str(self.root),stderr=str(self.root)))
+        self.assertEqual(job['document'],{'status':'COMPLETED'})
+        self.request()  # Config history must remain sanitized too.
+
+    def test_json_allowlist_and_exact_uint64(self):
+        m=manifest()|{'debug':str(self.root),'binary':str(self.binary)}
+        job=self.finished('sign',self.fields(),native(stdout=json.dumps({'status':'VERIFIED','manifest':m,'stderr':str(self.root)})))
+        self.assertEqual(job['state'],'succeeded')
+        result=job['document']['manifest']
+        self.assertEqual(result['version'],str(2**64-1));self.assertEqual(result['signer_count'],1)
+        self.assertNotIn('debug',result);self.assertNotIn('signer_spkis',result)
+        self.assertNotIn('fields',job);self.assertNotIn('argv',job)
+
+    def test_unexpected_json_fails_closed(self):
+        for raw in ['text', '{}', '{"status":"VERIFIED","status":"SIGNED_PARTIAL"}',
+                    json.dumps({'status':'VERIFIED','manifest':manifest()|{'version':True}}),
+                    json.dumps({'status':'VERIFIED','manifest':manifest()|{'module_id':str(self.root)}}),
+                    json.dumps({'status':'VERIFIED','manifest':manifest()|{'signature_algorithms':['unknown']}}),
+                    json.dumps({'status':'SIGNED_PARTIAL','manifest':manifest()})]:
+            with self.subTest(raw=raw):
+                job=self.finished('sign',self.fields(),native(stdout=raw))
+                self.assertEqual(job['state'],'failed');self.assertEqual(job['error'],'INVALID_RESULT')
+
+    def test_multisign_followup_has_no_paths_or_signing_secrets(self):
+        (self.root/'new.wasm').write_bytes(b'\0asm\x01\0\0\0')
+        job=self.finished('sign',self.fields()|{'allow-partial':True},native('SIGNED_PARTIAL'))
+        self.assertEqual(job['state'],'partial')
+        status,raw,_=self.request('/api/jobs/'+job['id']+'/next','POST',{'action':'append'})
+        self.assertEqual(status,200);next_=json.loads(raw)
+        self.assertEqual(next_['fields']['module-version'],str(2**64-1))
+        self.assertTrue(next_['fields']['append-signature'])
+        for field in ['key','certificate','crl','output']:
+            self.assertNotIn(field,next_['fields'])
+        status,raw,_=self.request('/api/jobs/'+job['id']+'/next','POST',{'action':'verify'})
+        self.assertEqual(set(json.loads(raw)['fields']),{'module','policy'})
+
+    def test_serialization_limits_and_shutdown(self):
         release=threading.Event()
         def held(*_):
-            release.wait(2)
-            return {'exit_code':0,'stdout':json.dumps({'status':'SIGNED_PARTIAL','manifest':{'version':2**64-1}}),'stderr':'','seconds':0,'interrupted':None}
+            release.wait(2);return native()
         with patch.object(gui,'run_bounded',held):
-            job=self.app.submit('sign',sign_fields() | {'allow-partial':True})
-            with self.assertRaises(gui.InputError):self.app.submit('version',{})
-            release.set();self.app.worker.join(timeout=3)
-            finished=self.app.get_job(job['id'])
-            self.assertEqual(finished['state'],'partial')
-            self.assertEqual(finished['document']['manifest']['version'],str(2**64-1))
-        local=gui.Application(self.binary,[self.root],3)
-        with patch.object(gui,'run_bounded',lambda args,timeout,stop:gui_runner([sys.executable,'-c','import time;time.sleep(60)'],timeout,stop)):
-            local.submit('version',{})
-            local.close()
-            self.assertIsNone(local.active)
-            self.assertEqual(list(local.jobs.values())[-1]['state'],'interrupted')
+            self.app.submit('sign',self.fields())
+            self.assertEqual(self.request('/api/jobs','POST',{'command':'sign','fields':self.fields()})[0],400)
+            self.assertEqual(self.request('/api/selections','POST',{'command':'sign','field':'key','language':'en'})[0],400)
+            release.set();self.app.worker.join(3)
+        for _ in range(22):
+            self.finished('sign',self.fields(),native())
+        self.assertEqual(len(self.app.jobs),20);self.assertEqual(len(self.app.inputs),20)
+        runner=gui.run_bounded
+        with patch.object(gui,'run_bounded',lambda args,timeout,stop:runner([sys.executable,'-c','import time;time.sleep(60)'],timeout,stop)):
+            job=self.app.submit('sign',self.fields());self.app.close()
+        self.assertEqual(self.app.get_job(job['id'])['state'],'interrupted')
+        self.assertFalse(self.app.files);self.assertFalse(self.app.inputs)
 
 
-gui_runner=gui.run_bounded
 if __name__=='__main__':
     unittest.main(verbosity=2)

@@ -108,7 +108,7 @@ authorityKeyIdentifier=keyid,issuer
     app=None;server=None;tls=None
     old_tls_env={k:os.environ.get(k) for k in ['SSL_CERT_FILE','SSL_CERT_DIR']}
     try:
-        app=gui.Application(a.binary,[out],30)
+        app=gui.Application(a.binary,30)
         server=gui.LocalServer(('127.0.0.1',0),app)
         worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
         def request(path,body=None):
@@ -116,22 +116,29 @@ authorityKeyIdentifier=keyid,issuer
             conn.request('GET' if body is None else 'POST',path,body=None if body is None else json.dumps(body),headers={'Authorization':'Bearer '+app.token,'Origin':server.origin,'Content-Type':'application/json'})
             r=conn.getresponse();raw=r.read();conn.close()
             if r.status not in (200,202):raise AssertionError(str(r.status)+' '+raw.decode())
+            assert str(out).encode() not in raw, 'Local path leaked in HTTP response'
+            assert b'PRIVATE KEY' not in raw, 'Key data leaked in HTTP response'
             return json.loads(raw)
         def call(name,command,fields,expected='succeeded'):
-            job=request('/api/jobs',{'command':command,'fields':fields})
+            public_fields=dict(fields)
+            for field,spec in gui.SCHEMAS[command].items():
+                if spec.rstrip('!') not in ('path','paths') or not fields.get(field):continue
+                paths=fields[field] if spec=='paths' else [fields[field]]
+                refs=[app.register_file(path,gui.file_role(command,field))['id'] for path in paths]
+                public_fields[field]=refs if spec=='paths' else refs[0]
+            job=request('/api/jobs',{'command':command,'fields':public_fields})
             deadline=time.monotonic()+40
             while job['state']=='running':
                 if time.monotonic()>deadline:raise RuntimeError('GUI job deadline')
                 time.sleep(.025);job=request('/api/jobs/'+job['id'])
-            record(name,job['state']==expected,state=job['state'],stdout=job['stdout'],stderr=job['stderr'])
+            record(name,job['state']==expected,state=job['state'],result=job)
             return job
-        call('native version','version',{})
-        for topic in ['root','secure','sign','verify','fetch','policy-init','policy-update']:
-            j=call('native help '+topic,'help',{'topic':topic})
-            if topic in gui.SCHEMAS and topic not in ['help','version']:
-                flags=set(re.findall(r'--([a-z][a-z-]*)',j['stdout']))-{'help'}
-                expected=set(gui.SCHEMAS[topic])-{'module','in-place'}-({'output'} if topic=='fetch' else set())
-                record('complete flag coverage '+topic,flags==expected,flags=sorted(flags),gui=sorted(expected))
+        for topic in ['sign','verify','fetch','policy-init','policy-update']:
+            result=gui.run_bounded([str(a.binary.resolve()),'wasm','secure',topic,'--help'],10)
+            flags=set(re.findall(r'--([a-z][a-z-]*)',result['stdout']))-{'help'}
+            expected=set(gui.SCHEMAS[topic])-{'module','in-place'}-({'output'} if topic=='fetch' else set())
+            record('complete flag coverage '+topic,result['exit_code']==0 and flags==expected,flags=sorted(flags),gui=sorted(expected))
+        record('configuration contains no local metadata',set(request('/api/config'))=={'algorithms','active_job','selection','jobs'})
         pki={
             'P256':make_pki('p256','EC','prime256v1'),
             'P384':make_pki('p384','EC','secp384r1'),
@@ -176,7 +183,7 @@ authorityKeyIdentifier=keyid,issuer
         call('ECDSA one-of-three partial','sign',sign_fields(m,pki['P256'],'ES256',output=str(one),**{'allow-partial':True}),'partial')
         call('partial cannot verify','verify',{'module':str(one),'policy':str(m/'policy')},'failed')
         duplicate=call('same ECDSA key remains partial','sign',sign_fields(m,pki['P256'],'ES256',module=str(one),output=str(m/'duplicate.wasm'),**{'append-signature':True,'allow-partial':True}),'partial')
-        record('same key does not increase quorum',len(duplicate['document']['manifest']['signer_spkis'])==1)
+        record('same key does not increase quorum',duplicate['document']['manifest']['signer_count']==1)
         call('same-key contributions cannot satisfy quorum','verify',{'module':str(m/'duplicate.wasm'),'policy':str(m/'policy')},'failed')
         call('mismatched manifest refused','sign',sign_fields(m,pki['RSA'],'RS256',module=str(one),output=str(two),**{'append-signature':True,'allow-partial':True,'module-version':'2'}),'failed')
         record('failed append did not publish',not two.exists())
@@ -184,7 +191,7 @@ authorityKeyIdentifier=keyid,issuer
         call('two-of-three cannot verify','verify',{'module':str(two),'policy':str(m/'policy')},'failed')
         call('Ed25519 completes quorum','sign',sign_fields(m,pki['Ed25519'],'Ed25519',module=str(two),output=str(three),**{'append-signature':True}))
         j=call('mixed full verification','verify',{'module':str(three),'policy':str(m/'policy')})
-        record('three distinct mixed signers',len(j['document']['manifest']['signer_spkis'])==3 and set(j['document']['manifest']['signature_algorithms'])=={'ES256','RS256','Ed25519'})
+        record('three distinct mixed signers',j['document']['manifest']['signer_count']==3 and set(j['document']['manifest']['signature_algorithms'])=={'ES256','RS256','Ed25519'})
         if a.uwvm_verifier:
             for module,allowed in [(one,False),(two,False),(three,True)]:
                 r=subprocess.run([str(a.uwvm_verifier.resolve()),str(m/'policy'),str(module)],capture_output=True,text=True,timeout=30)

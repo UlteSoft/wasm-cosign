@@ -1,14 +1,11 @@
-/* Copyright 2026 The Sigstore Authors. Apache-2.0. No external dependencies. */
+/* Copyright 2026 The Sigstore Authors. Apache-2.0. */
 'use strict';
-const $ = (selector, root = document) => root.querySelector(selector);
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {lang: 'zh', page: 'sign', config: null, token: '', forms: {}, jobs: [], active: null, result: null, mode: 'new', error: '', preview: ''};
+const $ = (s, root = document) => root.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const state = {lang:'zh', page:'sign', step:1, config:null, token:'', forms:{}, files:{}, jobs:[], active:null, picking:null, result:null, error:'', advanced:false, selectionTarget:null};
 const T = (zh, en) => state.lang === 'zh' ? zh : en;
 const stamp = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-const defaults = () => ({
-  sign: {'algorithm':'ES256','module-version':'1','security-epoch':'0','capabilities':'0','not-before':stamp(Date.now()-60000),'not-after':stamp(Date.now()+86400000)},
-  verify:{},fetch:{},'policy-init':{'algorithms':'ES256','signature-threshold':'1','policy-version':'1','minimum-version':'1','minimum-epoch':'0','capabilities':'0','max-crl-age-seconds':'86400','max-module-bytes':'104857600'},'policy-update':{},help:{topic:'secure'}
-});
+const defaults = () => ({sign:{algorithm:'ES256','module-version':'1','security-epoch':'0',capabilities:'0','not-before':stamp(Date.now()-60000),'not-after':stamp(Date.now()+86400000)}, verify:{}, fetch:{}, 'policy-init':{algorithms:'ES256','signature-threshold':'1','policy-version':'1','minimum-version':'1','minimum-epoch':'0',capabilities:'0','max-crl-age-seconds':'86400','max-module-bytes':'104857600'}, 'policy-update':{}});
 state.forms = defaults();
 const paths = {
   sign:'<path d="m14 5 5 5M4 20l4-1 12-12a2.1 2.1 0 0 0-3-3L5 16l-1 4Z"/><path d="M13 20h7"/>',
@@ -16,251 +13,161 @@ const paths = {
   fetch:'<path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/>',
   policy:'<path d="M7 3h10l3 3v15H4V3h3ZM8 8h6m-6 4h8m-8 4h5"/>',
   update:'<path d="M4 8a8 8 0 0 1 14-3l2 3M20 3v5h-5M20 16a8 8 0 0 1-14 3l-2-3M4 21v-5h5"/>',
-  history:'<path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v6l4 2"/>',
-  help:'<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 4h.01"/>',
   folder:'<path d="M3 6h7l2 2h9v12H3V6Z"/>',
   file:'<path d="M5 3h9l5 5v13H5V3Zm9 0v6h5M8 14h8m-8 3h5"/>',
   arrow:'<path d="M4 12h16m-5-5 5 5-5 5"/>',
   chevron:'<path d="m9 5 7 7-7 7"/>',
   close:'<path d="m6 6 12 12M6 18 18 6"/>',
-  up:'<path d="M12 20V4m-7 7 7-7 7 7"/>',
-  lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>',
-  terminal:'<path d="m5 7 5 5-5 5m8 0h6"/>',
   copy:'<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
   check:'<path d="m5 12 4 4L19 6"/>',
-  alert:'<path d="m12 3 10 18H2L12 3Zm0 6v5m0 3h.01"/>',
-  key:'<circle cx="8" cy="8" r="5"/><path d="m12 12 9 9m-6-6 3-3m0 6 3-3"/>',
-  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 0 0 18 18 18 0 0 0 0-18Z"/>'
+  alert:'<path d="m12 3 10 18H2L12 3Zm0 6v5m0 3h.01"/>'
 };
 const icon = name => `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24">${paths[name] || paths.file}</svg>`;
-const nav = () => [
-  ['sign','sign',T('签名工作台','Sign workspace')],['verify','verify',T('验证模块','Verify module')],['fetch','fetch',T('安全获取','Secure fetch')],
-  ['policy-init','policy',T('创建信任策略','Create policy')],['policy-update','update',T('更新信任策略','Update policy')],['history','history',T('操作记录','Session activity')],['help','help',T('帮助与环境','Help & environment')]
-];
-const title = command => nav().find(n => n[0] === command)?.[2] || T('版本信息','Version');
-const actionLabel = () => ({sign:T('生成 WSEA 签名','Create WSEA signature'),verify:T('验证此模块','Verify module'),fetch:T('获取并验证','Fetch & verify'),'policy-init':T('创建信任策略','Create trust policy'),'policy-update':T('保存策略更新','Apply policy update'),help:T('查看命令帮助','Read CLI help')})[state.page];
-const descriptions = () => ({
-  sign:T('创建签名，或向已有模块追加签名。','Create a signature or add another signer to a module.'),
-  verify:T('检查完整模块、签名门槛、证书链、CRL 与本机回滚状态。','Check the exact module, signature quorum, certificate chain, CRLs and local rollback state.'),
-  fetch:T('通过 HTTPS 获取模块。仅在 TLS 与完整 WSEA 验证通过后保存。','Retrieve a module over HTTPS. Save only after TLS and complete WSEA verification succeed.'),
-  'policy-init':T('建立本地信任锚、授权签名者与初始回滚状态。','Establish local trust anchors, authorized signers and initial rollback state.'),
-  'policy-update':T('更新授权规则，保留已有回滚状态。仅提交你明确填写的修改。','Update authorization while preserving rollback state. Only explicitly filled fields are submitted.'),
-  history:T('最近 20 次操作，重启服务后清空。','The last 20 operations, cleared when the server restarts.'),
-  help:T('查看命令用法、版本和程序路径。','View command usage, version and executable path.')
-});
-
+const title = page => ({sign:T('签名','Sign'), verify:T('校验','Verify'), more:T('更多工具','More tools'), fetch:T('获取并校验','Fetch & verify'), 'policy-init':T('创建策略','Create policy'), 'policy-update':T('更新策略','Update policy')})[page];
+const labels = () => ({module:T('WASM 文件','WASM file'),policy:T('信任策略','Trust policy'),output:state.page==='policy-init'?T('保存策略至','Save policy as'):T('保存文件至','Save file as'),key:T('私钥','Private key'),certificate:T('签名证书链','Signer certificate chain'),crl:T('CRL 文件','CRL file'),algorithm:T('签名算法','Algorithm'),'module-id':T('模块标识','Module ID'),'module-version':T('模块版本','Module version'),'security-epoch':T('安全纪元','Security epoch'),capabilities:T('能力位掩码','Capability mask'),'not-before':T('生效时间（UTC）','Valid from (UTC)'),'not-after':T('截止时间（UTC）','Valid until (UTC)'),'trust-root':T('根证书','Trust roots'),'state-dir':T('新状态目录','New state directory'),'additional-certificate':T('附加签名者证书','Additional signer certificates'),'signature-threshold':T('所需独立签名者数','Required distinct signers'),'policy-version':T('策略版本','Policy version'),'minimum-version':T('最低模块版本','Minimum module version'),'minimum-epoch':T('最低安全纪元','Minimum security epoch'),algorithms:T('允许的算法','Allowed algorithms'),'max-crl-age-seconds':T('CRL 最大年龄（秒）','Maximum CRL age (seconds)'),'max-module-bytes':T('模块大小上限（字节）','Maximum module size (bytes)'),url:T('HTTPS 地址','HTTPS URL')});
+const errors = code => ({
+  SESSION_REQUIRED:T('请重新打开终端中的会话链接。','Reopen the session link from the terminal.'),
+  REQUEST_REJECTED:T('请求被拒绝，请使用本次启动的会话链接。','Request rejected. Use the current session link.'),
+  INVALID_INPUT:T('请检查填写内容和选项。','Check the entered values and options.'),
+  INVALID_SELECTION:T('文件选择已失效，请重新选择。','File selection has expired. Select the file again.'),
+  FILE_UNAVAILABLE:T('文件不可用，请重新选择。','File unavailable. Select it again.'),
+  PICKER_UNAVAILABLE:T('无法打开文件对话框。请确认服务在本机桌面运行，并已安装 Zenity 或 Tk。','Cannot open the file dialog. Run the server on your desktop with Zenity or Tk installed.'),
+  BUSY:T('请先完成当前操作或文件选择。','Finish the current operation or file selection first.'),
+  SESSION_FULL:T('会话已满，请重新启动服务。','Session is full. Restart the server.'),
+  NOT_FOUND:T('此操作已过期，请重新选择文件。','This operation has expired. Select files again.'),
+  INVALID_RESULT:T('主程序返回格式异常，未判定为成功。','Unexpected result format. Success has not been confirmed.'),
+  OPERATION_FAILED:T('操作未通过。请检查文件、权限、证书有效期与策略设置。','Operation failed. Check files, permissions, certificate validity and policy settings.'),
+  INTERRUPTED:T('操作中断，文件可能已写入。请在本机检查后再决定是否重试。','Operation interrupted. Files may have been written. Check them locally before retrying.'),
+  CONNECTION:T('连接中断。恢复连接以确认结果，请勿重复提交。','Connection lost. Reconnect to confirm the result; do not resubmit.'),
+  REQUIRED:T('请完成标记的必填项。','Complete the required fields.'),
+  SIG_001:T('未找到可用签名。','No usable signature found.'),SIG_002:T('签名结构或清单无效。','Invalid signature structure or manifest.'),SIG_003:T('签名校验未通过。','Signature verification failed.'),SIG_004:T('模块内容或大小检查未通过。','Module content or size check failed.'),SIG_005:T('签名算法或密钥不符合要求。','Algorithm or key does not meet requirements.'),
+  CERT_001:T('证书格式不符合要求。','Certificate format does not meet requirements.'),CERT_002:T('证书或公钥格式检查未通过。','Certificate or public-key format check failed.'),CERT_003:T('证书检查未通过。','Certificate check failed.'),CERT_004:T('文件保护或证书检查未通过。','File protection or certificate check failed.'),CERT_005:T('撤销证据检查未通过。','Revocation evidence check failed.'),CERT_006:T('签名者授权或签名门槛未满足。','Signer authorization or signature threshold not met.'),
+  POL_001:T('版本回滚或本地安全状态检查未通过。','Version rollback or local security state check failed.'),POL_002:T('策略配置或更新不符合要求。','Policy configuration or update rejected.'),POL_003:T('模块权限不符合策略。','Module permissions do not meet policy.'),POL_004:T('版本、时间或回滚状态检查未通过。','Version, time or rollback state check failed.'),VM_001:T('WASM 模块不符合要求。','WASM module does not meet requirements.')
+})[code] || T('请求未完成，请检查输入后重试。','Request not completed. Check the inputs before retrying.');
 async function api(path, body) {
-  const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers:{Authorization:'Bearer '+state.token,...(body === undefined ? {} : {'Content-Type':'application/json'})}, body:body === undefined ? undefined : JSON.stringify(body), credentials:'omit',cache:'no-store',redirect:'error'});
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-  return data;
+  try {
+    const response = await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+state.token,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),credentials:'omit',cache:'no-store',redirect:'error'});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'REQUEST_REJECTED');
+    return data;
+  } catch(e) {throw new Error(/^[A-Z][A-Z_0-9]+$/.test(e.message)?e.message:'CONNECTION');}
 }
-function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('visible'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove('visible'),3500); }
-async function copy(text) { try {await navigator.clipboard.writeText(text);toast(T('已复制','Copied'));} catch {toast(T('浏览器不允许复制，请手动选择文本。','Clipboard unavailable. Select and copy the text manually.'));} }
+function toast(text) {const el=$('#toast');el.textContent=text;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),4000);}
 function remember() {
-  const form = $('#operation-form'); if (!form) return;
-  const values = {};
-  for (const el of form.elements) {
-    if (!el.name || el.disabled || el.dataset.algorithm) continue;
-    if (el.type === 'checkbox') {if (el.checked) values[el.name] = true;}
-    else if (el.name === 'additional-certificate') {const lines=el.value.split('\n').map(s=>s.trim()).filter(Boolean);if(lines.length)values[el.name]=lines;}
-    else if (el.value !== '') values[el.name] = el.value;
+  const form=$('#operation-form'); if(!form)return;
+  const f=state.forms[state.page];
+  for(const el of form.elements) {
+    if(!el.name || el.dataset.algorithm)continue;
+    if(el.type==='checkbox')f[el.name]=el.checked;
+    else if(el.value==='')delete f[el.name];
+    else f[el.name]=el.type==='datetime-local'?el.value+(el.value.length===16?':00':'')+'Z':el.value;
   }
-  const algorithms = [...form.querySelectorAll('[data-algorithm]:checked')].map(el=>el.value);
-  if (algorithms.length) values.algorithms=algorithms.join(',');
-  if (state.page === 'sign') {
-    if (state.mode === 'append') values['append-signature'] = true;
-    if (state.mode === 'replace') values['replace-signature'] = true;
-  }
-  state.forms[state.page] = values;
+  if(form.querySelector('[data-algorithm]'))f.algorithms=[...form.querySelectorAll('[data-algorithm]:checked')].map(el=>el.value).join(',');
 }
-function value(name) {return state.forms[state.page]?.[name] ?? '';}
-const hints = () => ({
-  module:T('现有 .wasm 文件的绝对路径。','Absolute path to an existing .wasm file.'),
-  policy:T('选择现有策略文件。','Select an existing policy file.'),
-  key:T('选择与算法匹配的 PEM 私钥。','Select a PEM private key matching the algorithm.'),
-  certificate:T('PEM：叶证书在前，中间证书依次在后。','PEM: leaf certificate first, followed by intermediates.'),
-  crl:T('选择完整且有效的 CRL 包。','Select a complete, valid CRL bundle.'),
-  'additional-certificate':T('每行一个绝对路径，最多 7 个；更新时将替换全部附加签名者。','One absolute path per line, up to 7. An update replaces the entire additional signer set.'),
-  'signature-threshold':T('不同授权公钥的数量，范围 1–8。重复密钥不计数。','Number of distinct authorized public keys, 1–8. Duplicate keys do not count.'),
-  'not-before':T('RFC3339 时间，Z 表示 UTC。','RFC3339 timestamp. Z denotes UTC.'),
-  'not-after':T('追加多签时，所有清单字段必须完全一致。','When appending, all manifest fields must match exactly.'),
-  'state-dir':T('新的本地受保护目录；已有安全状态不能重置。','New protected local directory. Existing security state cannot be reset.'),
-  'trust-root':T('PEM 格式的可信 CA 证书。','Trusted CA certificates in PEM format.'),
-  capabilities:T('取值范围 0–63。','Range: 0–63.'),
-  'policy-version':state.page==='policy-update'?T('必须严格大于当前策略版本。','Must be strictly greater than the current policy version.'):T('初始化策略版本，通常为 1。','Initial policy version, usually 1.'),
-  algorithms:state.page==='policy-update'?T('全部不选则保持原值；选择后替换允许集合。','Leave all unchecked to keep the current value. A selection replaces the allowed set.'):T('仅允许这里选中的算法；默认 ES256。','Only selected algorithms are allowed; ES256 is the default.'),
-  'max-crl-age-seconds':T('已认证 CRL 的最大允许年龄（秒）。','Maximum age of an authenticated CRL, in seconds.'),
-  'max-module-bytes':T('含签名的完整模块大小上限（字节）。','Size limit of the complete signed module, in bytes.'),
-  url:T('完整 .wasm 模块的 HTTPS 地址。','HTTPS URL of the complete .wasm module.')
-});
-const labels = () => ({
-  module:T('WASM 模块','WASM module'),policy:T('信任策略','Trust policy'),output:state.page==='policy-init'?T('新策略文件','New policy file'):T('输出文件','Output file'),key:T('私钥文件','Private key file'),certificate:T('签名证书链','Signer certificate chain'),crl:T('CRL 证据包','CRL evidence bundle'),algorithm:T('签名算法','Signature algorithm'),'module-id':T('模块标识','Module ID'),'module-version':T('模块版本','Module version'),'security-epoch':T('安全纪元','Security epoch'),capabilities:T('能力位掩码','Capability mask'),'not-before':T('生效时间 · UTC','Valid from · UTC'),'not-after':T('截止时间 · UTC','Valid until · UTC'),'trust-root':T('信任根证书','Trust root'),'state-dir':T('回滚状态目录','Rollback state directory'),'additional-certificate':T('附加签名者证书','Additional signer certificates'),'signature-threshold':T('多签门槛','Signature threshold'),'policy-version':T('策略版本','Policy version'),'minimum-version':T('最低模块版本','Minimum module version'),'minimum-epoch':T('最低安全纪元','Minimum security epoch'),algorithms:T('允许的算法','Allowed algorithms'),'max-crl-age-seconds':T('CRL 最大年龄','Maximum CRL age'),'max-module-bytes':T('模块大小上限','Maximum module size'),url:T('模块 HTTPS 地址','Module HTTPS URL'),topic:T('命令主题','Command topic')
-});
-function field(name, {type='text',required=false,full=false,placeholder='',hint=true}={}) {
-  const id='f-'+name, current=value(name), label=labels()[name];
-  const optional=state.page==='policy-update'&&!required?`<span class="optional">${T('留空保持原值','blank = unchanged')}</span>`:'';
-  const props=`id="${id}" name="${name}" ${required?'required':''} autocomplete="off" spellcheck="false"`;
-  let control;
-  if (type==='algorithm') {
-    const families=[['ECDSA',['ES256','ESP256','ES384','ESP384','ES512','ESP512']],['EdDSA',['Ed25519']],['RSA-PSS',['PS256','PS384','PS512']],['RSA PKCS#1 v1.5',['RS256','RS384','RS512']]];
-    control=`<select ${props}>${families.map(([title,items])=>`<optgroup label="${title}">${items.map(a=>`<option ${current===a?'selected':''}>${a}</option>`).join('')}</optgroup>`).join('')}</select>`;
-  } else if(type==='algorithms') {
-    const chosen=String(current).split(',');
-    control=`<div class="algorithm-picker" role="group" aria-labelledby="label-${name}">${state.config.algorithms.map(a=>`<label><input type="checkbox" data-algorithm="true" value="${a}" ${chosen.includes(a)?'checked':''}>${a}</label>`).join('')}</div>`;
-  } else if(type==='paths') {
-    control=`<textarea ${props} placeholder="/path/to/second-signer.pem\n/path/to/third-signer.pem">${esc(Array.isArray(current)?current.join('\n'):current)}</textarea><button type="button" class="text-btn" data-action="browse" data-field="${name}" data-kind="paths">${icon('folder')}${T('添加证书路径','Add certificate path')}</button>`;
-  } else if(type==='path'||type==='directory'||type==='output') {
-    control=`<div class="path-control"><input ${props} value="${esc(current)}" placeholder="${esc(placeholder||'/absolute/path/'+(name==='module'?'module.wasm':name==='output'?'signed.wasm':name==='policy'?'policy':name==='key'?'signer.key':name==='crl'?'bundle.crl.pem':name==='state-dir'?'state':name==='trust-root'?'root.pem':'signer.pem'))}"><button type="button" class="browse-btn" aria-label="${esc(T('选择路径：','Choose path: ')+label)}" data-action="browse" data-field="${name}" data-kind="${type}">${icon('folder')}</button></div>`;
-  } else {
-    control=`<input ${props} value="${esc(current)}" placeholder="${esc(placeholder)}" ${type==='uint'?'inputmode="numeric" pattern="[0-9]+"':''} type="${type==='url'?'url':'text'}">`;
-  }
-  return `<div class="field ${full?'full':''}" data-field-row="${name}"><label id="label-${name}" ${type==='algorithms'?'':`for="${id}"`}>${esc(label)}${required?'<span class="required" aria-hidden="true">*</span>':''}${optional}</label>${control}${hint&&hints()[name]?`<p class="field-hint">${hints()[name]}</p>`:''}</div>`;
+const value = name => state.forms[state.page]?.[name] ?? '';
+const busy = () => !!(state.active || state.picking);
+function fileField(name, required=false, full=false, many=false) {
+  const refs = many?(value(name)||[]):value(name)?[value(name)]:[];
+  const choose = ['output','state-dir'].includes(name)?T('选择保存位置','Choose save location'):T('选择文件','Choose file');
+  const selected=refs.map((id,i)=>`<span class="chosen"><span>${icon('file')}${esc(state.files[id]||T('已选文件','Selected file'))}</span><button type="button" class="icon-button" data-action="remove-file" data-field="${name}" data-index="${i}" aria-label="${esc(T('移除：','Remove: ')+(state.files[id]||labels()[name]))}" ${busy()?'disabled':''}>${icon('close')}</button></span>`).join('');
+  return `<div class="field ${full?'full':''}" data-file-field="${name}"><label>${labels()[name]}${required?'<span class="required">*</span>':''}</label>${selected}<button type="button" class="file-select ${name==='module'?'module-select':''}" data-action="select-file" data-field="${name}" data-many="${many}" aria-label="${esc(choose+T('：',': ')+labels()[name])}" ${busy()||many&&refs.length>=7?'disabled':''}>${icon(name==='module'?'file':'folder')}<span>${refs.length?many?T('添加证书','Add certificate'):T('重新选择','Choose another'):choose}</span>${icon('chevron')}</button></div>`;
 }
-function check(name, label, hint) {return `<div class="check-row"><input type="checkbox" id="f-${name}" name="${name}" ${value(name)?'checked':''}><label for="f-${name}">${label}<small>${hint}</small></label></div>`;}
-function section(number, heading, fields, tag='') {return `<section class="section-card"><div class="section-head"><span class="section-number">${number}</span><h2>${heading}</h2>${tag?`<span class="tail">${tag}</span>`:''}</div><div class="form-grid">${fields}</div></section>`;}
-function note(text,warning=false) {return `<div class="note ${warning?'warning':''}">${icon(warning?'alert':'verify')}<span>${text}</span></div>`;}
-const pf=(name,required=false,full=false,type='path')=>field(name,{type,required,full});
-const nf=(name,required=false)=>field(name,{type:'uint',required});
+function field(name, {required=false,type='text',full=false,hint=''}={}) {
+  const label=labels()[name],v=value(name);
+  const attrs=`id="f-${name}" name="${name}" ${required?'required':''} autocomplete="off" spellcheck="false"`;
+  let input;
+  if(type==='algorithm')input=`<select ${attrs}>${['ECDSA','EdDSA','RSA'].map(group=>`<optgroup label="${group}">${state.config.algorithms.filter(a=>group==='ECDSA'?a.startsWith('ES'):group==='EdDSA'?a==='Ed25519':/^[PR]S/.test(a)).map(a=>`<option ${a===v?'selected':''}>${a}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  else if(type==='algorithms')input=`<div class="algorithm-picker" role="group" aria-label="${label}">${state.config.algorithms.map(a=>`<label><input type="checkbox" data-algorithm="1" value="${a}" ${String(v).split(',').includes(a)?'checked':''}>${a}</label>`).join('')}</div>`;
+  else input=`<input ${attrs} type="${type==='time'?'datetime-local':type==='url'?'url':'text'}" ${type==='time'?'step="1"':''} ${type==='uint'?'inputmode="numeric" pattern="[0-9]+"':''} value="${esc(type==='time'?String(v).replace(/Z$/,''):v)}" ${name==='module-id'?'placeholder="com.example.app"':''}>`;
+  return `<div class="field ${full?'full':''}"><label for="f-${name}">${label}${required?'<span class="required">*</span>':''}</label>${input}${hint?`<small>${hint}</small>`:''}</div>`;
+}
+const nf = (n,required=false) => field(n,{type:'uint',required});
+const check = (n,label,hint='') => `<label class="check-row"><input type="checkbox" name="${n}" ${value(n)?'checked':''}><span>${label}${hint?`<small>${hint}</small>`:''}</span></label>`;
+const grid = content => `<div class="form-grid">${content}</div>`;
+const advanced = content => `<details class="advanced" id="advanced" ${state.advanced?'open':''}><summary>${T('高级选项','Advanced options')}</summary>${grid(content)}</details>`;
 function formContent() {
-  if(state.page==='sign') return `
-    <div class="mode-tabs" role="group" aria-label="${T('签名方式','Signing mode')}">${[['new',T('创建签名','New signature')],['append',T('追加多签','Append signature')],['replace',T('替换签名','Replace signatures')]].map(([m,l])=>`<button type="button" data-action="mode" data-mode="${m}" aria-pressed="${state.mode===m}" class="${state.mode===m?'selected':''}">${l}</button>`).join('')}</div>
-    ${state.mode==='append'?note(T('保留已有签名。请选择另一授权密钥，并保持清单字段一致。','Keep existing signatures. Choose another authorized key and retain the same manifest.')):state.mode==='replace'?note(T('将替换模块中全部已有签名。','Replaces all existing signatures in the module.'),true):''}
-    ${section('01',T('文件与策略','Files & policy'),pf('module',true,true)+pf('policy',true,true)+check('in-place',T('原地替换输入文件','Replace the input file in place'),T('直接写回原文件。关闭时保存到新文件。','Write back to the input. Otherwise, save to a new file.'))+pf('output',!value('in-place'),true,'output'),'WASM / WSEA v2')}
-    ${section('02',T('签名身份','Signing identity'),field('algorithm',{type:'algorithm',required:true})+'<p class="algorithm-note">'+T('ECDSA · Ed25519 · RSA','ECDSA · Ed25519 · RSA')+'</p>'+pf('key',true,true)+pf('certificate',true)+pf('crl',true),'LOCAL KEY')}
-    ${section('03',T('签名清单','Signed manifest'),field('module-id',{required:true,placeholder:'com.example.app'})+nf('module-version',true)+nf('security-epoch')+nf('capabilities')+field('not-before',{required:true})+field('not-after',{required:true})+check('allow-partial',T('允许输出尚未达到门槛的多签中间文件','Allow an intermediate signature below quorum'),T('未达门槛时保存中间文件，供后续追加签名。','Save an intermediate file below quorum to collect more signatures.')))}`;
-  if(state.page==='verify') return section('01',T('选择待验证模块','Choose a module to verify'),pf('module',true,true)+pf('policy',true,true),'OFFLINE')+note(T('所有签名有效且满足策略门槛时，验证通过。','Verification requires valid signatures meeting the policy threshold.'));
-  if(state.page==='fetch') return section('01',T('可信模块来源','Module source'),field('url',{type:'url',required:true,full:true,placeholder:'https://example.com/releases/module.wasm'})+pf('policy',true,true)+pf('output',true,true,'output'),'HTTPS + WSEA')+note(T('验证通过后保存到新文件，不覆盖已有文件。','Save to a new file after verification; existing files are not overwritten.'));
-  if(state.page==='policy-init'||state.page==='policy-update') {
-    const init=state.page==='policy-init';
-    return (!init?note(T('留空保持原值；填写附加证书或选择算法会替换对应集合。','Blank fields stay unchanged. Certificates and algorithms replace their respective sets.')):note(T('请选择新的策略文件和状态目录。已有状态不会被重置。','Choose a new policy file and state directory. Existing state will not be reset.')))+
-    section('01',T('本地信任配置','Local trust configuration'),(init?pf('output',true,true,'output'):pf('policy',true,true))+nf('policy-version',!init)+pf('trust-root',init)+ (init?pf('state-dir',true,true,'directory'):''),'LOCAL TRUST')+
-    section('02',T('模块与授权签名者','Module & authorized signers'),field('module-id',{required:init,full:true,placeholder:'com.example.app'})+pf('certificate',init,true)+field('additional-certificate',{type:'paths',full:true})+(!init?check('clear-additional-signers',T('清除所有附加签名者','Clear all additional signers'),T('不能同时填写附加证书；门槛必须与剩余签名者数量兼容。','Cannot be combined with additional certificates. The threshold must fit the remaining signers.')):'')+nf('signature-threshold')+nf('minimum-version')+nf('minimum-epoch')+nf('capabilities')+field('algorithms',{type:'algorithms',full:true}),'1–8 SIGNERS')+
-    section('03',T('验证资源限制','Verification limits'),nf('max-crl-age-seconds')+nf('max-module-bytes'),'POLICY LIMITS');
-  }
-  if(state.page==='help') return `
-    ${section('01',T('主程序帮助','Native CLI reference'),`<div class="field full"><label for="f-topic">${labels().topic}</label><select id="f-topic" name="topic">${['root','secure','sign','verify','fetch','policy-init','policy-update'].map(t=>`<option value="${t}" ${value('topic')===t?'selected':''}>${t==='root'?'cosign':t==='secure'?'wasm secure':t}</option>`).join('')}</select></div>`)}
-    ${section('02',T('当前运行环境','Current environment'),`<div class="field full"><label>${T('二进制路径','Binary path')}</label><pre class="output">${esc(state.config.binary)}</pre><label>${T('版本','Version')}</label><p class="mono">${esc(state.config.version)}</p><button class="text-btn" data-action="version" type="button">${icon('update')}${T('重新查询版本','Query version again')}</button><p class="field-hint">${T('命令时限','Command timeout')}: ${state.config.timeout}s · ${T('文件选择器根目录','File-picker roots')}: ${esc(state.config.browse_roots.join(' · '))}</p></div>`)} `;
-  return '';
+  if(state.page==='sign' && state.step===1) return grid(fileField('module',true,true)+fileField('policy',true)+fileField('key',true)+fileField('certificate',true)+fileField('crl',true)+(!value('in-place')?fileField('output',true,true):`<p class="note full">${T('已启用原地签名，将写回所选 WASM 文件。','In-place signing is enabled; the selected WASM file will be replaced.')}</p>`))+advanced(check('in-place',T('原地签名','Sign in place'),T('写回原文件，不创建新的输出文件。','Replace the input file instead of creating a new output.')));
+  if(state.page==='sign')return grid(field('module-id',{required:true})+nf('module-version',true)+field('algorithm',{type:'algorithm',full:true})+field('not-before',{type:'time',required:true})+field('not-after',{type:'time',required:true})+`<div class="presets full"><span>${T('有效期','Validity')}</span>${[1,7,30].map(d=>`<button type="button" data-action="validity" data-days="${d}">${d}${T(' 天',' days')}</button>`).join('')}</div>`)+advanced(`<div class="field full"><label for="f-mode">${T('签名方式','Signing mode')}</label><select id="f-mode"><option value="new" ${!value('append-signature')&&!value('replace-signature')?'selected':''}>${T('创建签名','New signature')}</option><option value="append" ${value('append-signature')?'selected':''}>${T('追加签名','Append signature')}</option><option value="replace" ${value('replace-signature')?'selected':''}>${T('替换全部签名','Replace all signatures')}</option></select></div>`+nf('security-epoch')+nf('capabilities')+check('allow-partial',T('允许多签中间文件','Allow an intermediate multisignature file'),T('未达门槛时可继续追加，不能通过完整校验。','Below quorum, add more signatures before full verification.')));
+  if(state.page==='verify')return grid(fileField('module',true,true)+fileField('policy',true,true));
+  if(state.page==='fetch')return grid(field('url',{type:'url',required:true,full:true})+fileField('policy',true,true)+fileField('output',true,true));
+  const init=state.page==='policy-init';
+  return `<p class="note">${init?T('选择新策略文件和新状态目录。','Choose a new policy file and state directory.'):T('可选项留空保持原值；填写证书或算法后替换对应集合。','Blank optional fields stay unchanged. Certificates and algorithms replace their sets.')}</p>`+grid(fileField(init?'output':'policy',true,true)+nf('policy-version',!init)+field('module-id',{required:init})+fileField('trust-root',init)+fileField('certificate',init)+(init?fileField('state-dir',true,true):'')+nf('signature-threshold')+field('algorithms',{type:'algorithms',full:true}))+advanced(fileField('additional-certificate',false,true,true)+(!init?check('clear-additional-signers',T('清除附加签名者','Clear additional signers'),T('同时调整门槛；不能同时添加证书。','Adjust the threshold too; cannot also add certificates.')):'')+nf('minimum-version')+nf('minimum-epoch')+nf('capabilities')+nf('max-crl-age-seconds')+nf('max-module-bytes'));
 }
 function render() {
-  document.documentElement.lang=state.lang==='zh'?'zh-CN':'en-US';
-  document.title=title(state.page)+' · WSEA Studio';
-  const items=nav();
-  $('#app').innerHTML=`<div class="shell"><aside class="sidebar">
-    <div class="brand"><img src="/mark.svg" alt=""><div><strong>WSEA Studio</strong><small>LOCAL SIGNING SUITE</small></div></div>
-    <div><div class="nav-label">${T('工作空间','WORKSPACE')}</div><nav class="nav" aria-label="${T('功能导航','Tools')}">${items.slice(0,5).map(navButton).join('')}</nav></div>
-    <div><div class="nav-label">${T('会话与工具','SESSION & TOOLS')}</div><nav class="nav secondary" aria-label="${T('会话导航','Session')}">${items.slice(5).map(navButton).join('')}</nav></div>
-    <div class="sidebar-bottom"><div class="connected"><span class="dot"></span>${T('本机二进制已连接','Local binary connected')}</div><div class="binary-label">wasm-cosign</div><div class="version">${esc(state.config.version.replace(/^wasm-cosign /,''))}</div></div>
-  </aside><div class="workspace"><header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><span>/</span><strong>${title(state.page)}</strong></div><div class="top-actions"><span class="local-badge">${icon('lock')}127.0.0.1 <span class="dot"></span></span><button class="language" data-action="language" aria-label="${T('Switch to English','切换到中文')}">${T('EN / 中','中 / EN')}</button></div></header>
-  <main id="main"><div class="page-heading"><div><div class="eyebrow">WASM-COSIGN</div><h1>${title(state.page)}</h1><p class="subtitle">${descriptions()[state.page]}</p></div><div class="protocol-tag">${icon('verify')}WSEA v2</div></div>
-  ${state.page==='history'?`<div id="history-list">${historyHTML()}</div><div id="result-area">${resultHTML()}</div>`:`<div class="layout"><div class="left-column"><form id="operation-form" autocomplete="off">${formContent()}</form><div id="form-error" role="alert">${state.error?`<div class="error">${esc(state.error)}</div>`:''}</div><div id="result-area" aria-live="polite">${resultHTML()}</div></div>${railHTML()}</div>`}
-  <footer class="page-footer"><span>WSEA Studio · wasm-cosign</span><span>${T('本地工作区','Local workspace')}</span></footer></main></div></div>`;
-  toggleInPlace();
+  document.documentElement.lang=state.lang==='zh'?'zh-CN':'en-US';document.title=title(state.page)+' · WSEA Studio';
+  const more=!['sign','verify'].includes(state.page);
+  $('#app').innerHTML=`<div class="app-shell"><header class="topbar"><a class="brand" href="#" data-action="navigate" data-page="sign"><img src="/mark.svg" alt=""><strong>WSEA<span> Studio</span></strong></a><nav aria-label="${T('主要功能','Main navigation')}">${['sign','verify','more'].map(p=>`<button data-action="navigate" data-page="${p}" class="${(p==='more'?more:state.page===p)?'active':''}" ${(p==='more'?more:state.page===p)?'aria-current="page"':''}>${icon(p==='more'?'folder':p)}${title(p)}</button>`).join('')}</nav><button class="language" data-action="language" aria-label="${T('Switch to English','切换到中文')}">${T('EN','中文')}</button></header><main id="main"><div class="page-heading"><span class="eyebrow">WASM-COSIGN</span><h1>${title(state.page)}</h1><p>${({sign:T('为 WASM 文件添加可信签名。','Add a trusted signature to your WASM file.'),verify:T('选择文件与策略，检查签名是否有效。','Choose a file and policy to check its signatures.'),more:T('管理签名策略，或获取已签名的模块。','Manage signing policies or retrieve signed modules.'),fetch:T('通过 HTTPS 获取，校验通过后保存。','Retrieve over HTTPS and save after verification.'),'policy-init':T('设置授权签名者和校验规则。','Set authorized signers and verification rules.'),'policy-update':T('修改策略并保留已有安全状态。','Update a policy while preserving its security state.')})[state.page]}</p></div>
+  ${state.page==='more'?toolsHTML():`${more?`<button class="back-link" data-action="navigate" data-page="more">← ${T('返回工具','Back to tools')}</button>`:''}${state.page==='sign'?`<div class="steps"><button data-action="step" data-step="1" ${state.step===1?'aria-current="step"':''}><span>1</span>${T('选择文件','Select files')}</button><i></i><button data-action="step" data-step="2" ${state.step===2?'aria-current="step"':''}><span>2</span>${T('签名设置','Signature settings')}</button></div>`:''}<form id="operation-form" autocomplete="off" novalidate><section class="work-card">${formContent()}</section><div id="form-error" role="alert">${state.error?`<p class="error">${errors(state.error)}</p>`:''}</div><div class="action-bar">${state.page==='sign'&&state.step===2?`<button type="button" class="secondary" data-action="step" data-step="1">${T('上一步','Back')}</button>`:`<span class="action-note">${T('* 为必填项','* Required')}</span>`}<button type="submit" class="primary" id="run-button" ${busy()?'disabled':''}>${actionLabel()}${icon('arrow')}</button></div></form>`}
+  <div id="result-area" aria-live="polite">${resultHTML()}</div><details class="recent"><summary>${T('最近操作','Recent operations')} <span id="recent-count">${state.jobs.length}</span></summary><div id="history-list">${historyHTML()}</div></details><footer><span>WSEA Studio</span><span>WSEA v2</span></footer></main></div>`;
 }
-function navButton([id,name,label]) {return `<button type="button" data-action="navigate" data-page="${id}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(name)}<span>${label}</span></button>`;}
-function railHTML() {return `<aside class="side-panel"><div class="summary-card"><div class="summary-top"><div class="mini-label">OPERATION OVERVIEW</div><div class="summary-title">${icon(state.page==='sign'?'sign':state.page==='verify'?'verify':state.page==='fetch'?'globe':'policy')}${T('本次操作','This operation')}</div><dl class="summary-list" id="summary-list">${summaryHTML()}</dl></div><div class="summary-bottom"><button type="submit" form="operation-form" class="run-btn" id="run-button" ${state.active?'disabled':''}>${state.active?'<span class="spinner" aria-hidden="true"></span>'+T('正在执行…','Running…'):actionLabel()+icon('arrow')}</button><button class="preview-btn" type="button" data-action="preview">${icon('terminal')}${T('预览实际命令','Preview actual command')}</button><pre class="preview-box" id="command-preview" ${state.preview?'':'hidden'}>${esc(state.preview)}</pre></div></div>
-  </aside>`;}
-function summaryHTML() {
-  const f=state.forms[state.page]||{}, rows=[];
-  rows.push([T('对象','Target'),'WebAssembly']);
-  if(state.page==='sign') {
-    rows.push([T('算法','Algorithm'),f.algorithm||'ES256']);
-    rows.push([T('模式','Mode'),state.mode==='append'?T('追加多签','Append'):state.mode==='replace'?T('替换签名','Replace'):T('创建签名','New signature')]);
-    rows.push([T('输出','Output'),f['in-place']?T('原地原子替换','Atomic in-place'):T('新文件','New file')]);
-    rows.push([T('签名门槛','Quorum'),f['allow-partial']?T('允许中间文件','Partial allowed'):T('必须完整满足','Full quorum required')]);
-  } else if(state.page==='verify'||state.page==='fetch') rows.push([T('签名门槛','Quorum'),T('必须完整满足','Full quorum required')]);
-  else if(state.page.startsWith('policy')) {rows.push([T('策略版本','Policy version'),f['policy-version']||'—']);rows.push([T('状态','State'),state.page==='policy-init'?T('创建新状态','Create new state'):T('保留现有状态','Preserve existing state')]);}
-  rows.push([T('网络','Network'),state.page==='fetch'?'HTTPS':T('离线','Offline')]);
-  return rows.map(([k,v])=>`<div class="summary-row"><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
-}
-function toggleInPlace() {
-  if(state.page!=='sign')return;
-  const box=$('#f-in-place'), input=$('#f-output'), row=$('[data-field-row="output"]');
-  if(box&&input){row.hidden=box.checked;input.disabled=box.checked;input.required=!box.checked;}
-}
-function navigate(page) {remember();state.page=page;state.error='';state.preview='';state.result=null;render();window.scrollTo({top:0});}
-function jobLabel(job) {
-  if(job.state==='succeeded') return ['verify','sign','fetch'].includes(job.command)?T('完整验签通过','Full verification passed'):T('操作已完成','Operation completed');
-  return ({running:T('正在执行','Running'),partial:T('中间签名 · 尚未达门槛','Partial signature · quorum incomplete'),failed:T('操作未通过','Operation did not pass'),interrupted:T('操作中断 · 请检查本地状态','Interrupted · inspect local state')})[job.state]||job.state;
-}
+function toolsHTML() {return `<div class="tool-grid">${[['policy-init','policy',T('创建信任策略和多签门槛。','Create trust rules and a signature threshold.')],['policy-update','update',T('更新签名者、版本和算法。','Update signers, versions and algorithms.')],['fetch','fetch',T('下载并校验完整模块。','Download and verify a complete module.')]].map(([p,i,d])=>`<button class="tool-card" data-action="navigate" data-page="${p}">${icon(i)}<strong>${title(p)}</strong><span>${d}</span><small>${T('打开','Open')} ↗</small></button>`).join('')}</div>`;}
+function actionLabel() {if(state.active)return T('正在处理…','Processing…');if(state.picking)return T('请在系统窗口中选择…','Choose in the system dialog…');return state.page==='sign'&&state.step===1?T('下一步','Next'):({sign:T('开始签名','Sign file'),verify:T('开始校验','Verify file'),fetch:T('获取并校验','Fetch & verify'),'policy-init':T('创建策略','Create policy'),'policy-update':T('保存更新','Save changes')})[state.page]||'';}
+function jobLabel(j) {return ({running:T('正在处理','Processing'),partial:T('签名已添加，尚未达门槛','Signature added · more signers needed'),failed:T('操作未通过','Operation failed'),interrupted:T('操作已中断','Operation interrupted'),succeeded:j.command==='verify'?T('校验通过','Verification passed'):j.command==='sign'?T('签名完成','Signature complete'):j.command==='fetch'?T('已获取并通过校验','Retrieved and verified'):T('策略已保存','Policy saved')})[j.state];}
 function resultHTML() {
-  const job=state.jobs.find(j=>j.id===state.result);if(!job)return '';
-  const running=job.state==='running', m=job.document?.manifest, symbol=running?'<span class="spinner"></span>':icon(job.state==='succeeded'?'check':job.state==='partial'?'history':'alert');
-  let subtitle=running?T('正在处理，请稍候。','Processing. Please wait.'):job.state==='partial'?T('尚未满足签名门槛，请继续追加其他授权密钥的签名。','Quorum is incomplete. Add signatures from other authorized keys.'):job.state==='interrupted'?T('中断时可能已有文件写入。检查输出与策略状态后再决定是否重试。','Files may already have been written. Inspect outputs and policy state before deciding to retry.'):`${title(job.command)} · ${job.seconds}s · exit ${job.exit_code ?? '—'}`;
-  const artifact=job.fields.output||job.fields.module;
-  let body='';
-  if(m){
-    const signers=m.signer_spkis||[],algs=m.signature_algorithms||[m.algorithm];
-    body+=`<div class="result-meta"><div><small>${T('模块标识','Module ID')}</small><strong>${esc(m.module_id)}</strong></div><div><small>${T('模块版本','Module version')}</small><strong class="mono">${esc(m.version)}</strong></div><div><small>${T('独立签名者','Distinct signers')}</small><strong>${signers.length}</strong></div></div><p class="field-hint">${T('签名贡献的算法','Contribution algorithms')}: ${esc(algs.join(' · '))}</p>${signers.map((s,i)=>`<div class="signer-row"><span class="chip">KEY ${String(i+1).padStart(2,'0')}</span><code>SPKI ${esc(s)}</code></div>`).join('')}`;
-    if(artifact)body+=`<p class="field-hint">${T('模块路径','Module path')} · <span class="mono">${esc(artifact)}</span></p>`;
-    if(job.command==='sign')body+=`<div class="result-actions"><button type="button" class="text-btn" data-action="continue-sign" data-id="${job.id}">${icon('sign')}${T('继续追加另一签名','Append another signature')}</button><button type="button" class="text-btn" data-action="verify-artifact" data-id="${job.id}">${icon('verify')}${T('转到完整验签','Open full verification')}</button></div>`;
-  }
-  if(job.protocol_error)body+=`<div class="error">${esc(job.protocol_error)}</div>`;
-  if(!running){body+=`<details ${job.state==='failed'||job.state==='interrupted'||!m?'open':''}><summary>${T('主程序原始输出','Raw CLI output')}</summary><pre class="output">${esc((job.stdout||'')+(job.stderr?'\n'+job.stderr:''))||T('（无输出）','(No output)')}</pre></details><details><summary>${T('实际命令与完整清单','Actual command & full manifest')}</summary><pre class="output">${esc(job.display)}</pre>${m?`<pre class="output">${esc(JSON.stringify(m,null,2))}</pre>`:''}</details><button type="button" class="text-btn" data-action="copy-result" data-id="${job.id}">${icon('copy')}${T('复制结果','Copy result')}</button>`;}
-  return `<section class="result ${job.state}" id="latest-result"><div class="result-head">${symbol}<div><strong>${jobLabel(job)}</strong><small>${subtitle}</small></div></div>${body?`<div class="result-body">${body}</div>`:''}</section>`;
+  const j=state.jobs.find(j=>j.id===state.result);if(!j)return '';
+  const m=j.document?.manifest, good=['succeeded','partial'].includes(j.state);
+  return `<section class="result ${j.state}" id="latest-result"><div class="result-head">${j.state==='running'?'<span class="spinner"></span>':icon(good?'check':'alert')}<h2>${jobLabel(j)}</h2></div><div class="result-body">${j.error?`<p>${errors(j.error)}</p><small>${esc(j.error)}</small>`:''}${j.state==='partial'?`<p>${T('请继续添加其他授权密钥的签名。','Continue with another authorized signing key.')}</p>`:''}${m?`<dl class="result-meta"><div><dt>${T('模块','Module')}</dt><dd>${esc(m.module_id)}</dd></div><div><dt>${T('版本','Version')}</dt><dd>${esc(m.version)}</dd></div><div><dt>${T('独立签名者','Distinct signers')}</dt><dd>${m.signer_count}</dd></div></dl><div class="chips">${m.signature_algorithms.map(a=>`<span>${esc(a)}</span>`).join('')}</div>`:''}${good?`<div class="result-actions">${j.command==='sign'?`<button class="secondary" data-action="new-sign" ${busy()?'disabled':''}>${T('新的签名','New signing task')}</button>`:''}${m?`<button data-action="next-operation" data-next="append" data-id="${j.id}" class="secondary" ${busy()?'disabled':''}>${T('追加签名','Add signature')}</button>${j.command!=='verify'?`<button data-action="next-operation" data-next="verify" data-id="${j.id}" class="secondary" ${busy()?'disabled':''}>${T('校验此文件','Verify this file')}</button>`:''}`:`<button data-action="next-operation" data-next="use-policy" data-id="${j.id}" class="secondary" ${busy()?'disabled':''}>${T('用于签名','Use for signing')}</button>`}<button class="text-btn" data-action="copy-json" data-id="${j.id}">${icon('copy')}${T('复制 JSON 结果','Copy JSON result')}</button></div>`:''}</div></section>`;
 }
-function historyHTML(){return state.jobs.length?state.jobs.map(j=>`<button class="history-row ${j.state}" data-action="show-job" data-id="${j.id}">${icon(j.state==='succeeded'?'check':j.state==='failed'?'alert':'history')}<span><strong>${title(j.command)}</strong><small>${new Date(j.started*1000).toLocaleTimeString(state.lang==='zh'?'zh-CN':'en-US')} · ${esc(j.fields['module-id']||j.fields.module?.split(/[\\/]/).pop()||j.command)}</small></span><span class="history-status">${jobLabel(j)}</span></button>`).join(''):`<div class="empty-state">${icon('history')}<h2>${T('从一份可信签名开始','Start with a trusted signature')}</h2>${T('完成一次操作后，结果会出现在这里。','Your operations will appear here once you run a command.')}</div>`;}
-function refreshResult() {const target=$('#result-area');if(target)target.innerHTML=resultHTML();const history=$('#history-list');if(history)history.innerHTML=historyHTML();const run=$('#run-button');if(run){run.disabled=!!state.active;run.innerHTML=state.active?'<span class="spinner"></span>'+T('正在执行…','Running…'):actionLabel()+icon('arrow');}}
-function showError(message){state.error=message;const el=$('#form-error');if(el){el.innerHTML=`<div class="error">${esc(message)}</div>`;el.scrollIntoView({block:'nearest',behavior:'smooth'});}else toast(message);}
-async function launch(command=state.page, fields=state.forms[state.page]) {
-  if(state.active)return;
-  state.active='submitting';state.error='';refreshResult();if($('#form-error'))$('#form-error').textContent='';
-  try{
-    const job=await api('/api/jobs',{command,fields});state.jobs.unshift(job);state.jobs=state.jobs.slice(0,20);state.active=job.id;state.result=job.id;refreshResult();$('#latest-result')?.scrollIntoView({block:'nearest',behavior:'smooth'});poll(job.id);
-  }catch(error){state.active=null;refreshResult();showError(error.message);}
+function historyHTML() {return state.jobs.length?state.jobs.map(j=>`<button data-action="show-job" data-id="${j.id}" class="history-row"><span>${title(j.command)}</span><small class="${j.state}">${jobLabel(j)}</small>${icon('chevron')}</button>`).join(''):`<p class="muted">${T('还没有操作记录。','No operations yet.')}</p>`;}
+function refresh() {$('#result-area')&&($('#result-area').innerHTML=resultHTML());$('#history-list')&&($('#history-list').innerHTML=historyHTML());$('#recent-count')&&($('#recent-count').textContent=state.jobs.length);const b=$('#run-button');if(b){b.disabled=busy();b.innerHTML=actionLabel()+icon('arrow');}document.querySelectorAll('[data-action="select-file"],[data-action="remove-file"]').forEach(b=>b.disabled=busy()||(b.dataset.many==='true'&&(value(b.dataset.field)||[]).length>=7));}
+function showError(code){state.error=code;const e=$('#form-error');if(e){e.innerHTML=`<p class="error">${errors(code)}${code==='CONNECTION'?` <button class="text-btn" data-action="reconnect">${T('重新连接','Reconnect')}</button>`:''}</p>`;e.scrollIntoView({block:'nearest',behavior:'smooth'});}else toast(errors(code));}
+function navigate(page){remember();state.page=page;state.error='';state.result=null;state.advanced=false;render();window.scrollTo({top:0});}
+function validateFiles() {
+  const f=state.forms[state.page],required={sign:['module','policy','key','certificate','crl',...(!f['in-place']?['output']:[])],verify:['module','policy'],fetch:['policy','output'],'policy-init':['output','trust-root','state-dir','certificate'],'policy-update':['policy']}[state.page]||[];
+  const missing=required.filter(n=>!f[n]);document.querySelectorAll('[data-file-field]').forEach(el=>el.classList.toggle('missing',missing.includes(el.dataset.fileField)));
+  if(missing.length){showError('REQUIRED');$(`[data-file-field="${missing[0]}"] button`)?.focus();return false;}return true;
 }
-async function poll(id){
-  try{const job=await api('/api/jobs/'+id);state.jobs=state.jobs.map(j=>j.id===id?job:j);if(job.state!=='running')state.active=null;refreshResult();if(job.state==='running')setTimeout(()=>poll(id),650);}
-  catch(error){state.active=id;refreshResult();showError(T('无法获取状态；请恢复服务连接后查看记录，勿重复提交。 ','Cannot retrieve status. Restore the connection and inspect activity; do not resubmit. ')+error.message);}
+function validateForm(){const form=$('#operation-form');const invalid=[...form.querySelectorAll('input,select')].find(el=>!el.checkValidity());if(invalid){invalid.closest('details')?.setAttribute('open','');invalid.reportValidity();return false;}return true;}
+async function selectFile(field,many) {
+  if(busy())return;remember();const page=state.page;state.selectionTarget={page,field,many};state.picking='starting';refresh();
+  try {const s=await api('/api/selections',{command:page,field,language:state.lang});state.picking=s.id;pollSelection(s.id,{page,field,many});toast(T('请在系统文件窗口中选择。','Choose a file in the system dialog.'));}
+  catch(e){state.picking=null;refresh();showError(e.message);}
 }
-function continueSign(id){
-  const j=state.jobs.find(j=>j.id===id),m=j?.document?.manifest;if(!m)return;
-  remember();state.forms.sign={module:j.fields.output||j.fields.module,policy:j.fields.policy,algorithm:'ES256','module-id':m.module_id,'module-version':m.version,'security-epoch':m.security_epoch,capabilities:m.capabilities,'not-before':stamp(Number(m.not_before)*1000),'not-after':stamp(Number(m.not_after)*1000),'allow-partial':j.state==='partial','append-signature':true};
-  state.mode='append';state.page='sign';state.result=null;state.error='';state.preview='';render();window.scrollTo({top:0});toast(T('已沿用清单，请选择另一密钥、证书、CRL 与新输出路径。','Manifest retained. Choose another key, certificate, CRLs and a new output path.'));
+async function pollSelection(id,target) {
+  try {const s=await api('/api/selections/'+id);if(s.state==='picking'){setTimeout(()=>pollSelection(id,target),400);return;}state.picking=null;state.selectionTarget=null;
+    if(s.state==='selected'&&target){remember();state.files[s.file.id]=s.file.name;const f=state.forms[target.page];f[target.field]=target.many?[...(f[target.field]||[]),s.file.id]:s.file.id;state.error='';render();$(`[data-file-field="${target.field}"] button`)?.focus();}
+    else{refresh();if(s.state==='failed')showError(s.error);}
+  }catch(e){showError(e.message);refresh();}}
+async function launch() {
+  if(busy())return;remember();if(!validateFiles()||!validateForm())return;
+  if(state.page==='sign'&&state.step===1){state.step=2;state.error='';render();$('#f-module-id')?.focus();return;}
+  const fields={...state.forms[state.page]};if(fields['in-place'])delete fields.output;
+  state.error='';state.active='submitting';refresh();$('#form-error').textContent='';
+  try {const j=await api('/api/jobs',{command:state.page,fields});state.jobs.unshift(j);state.jobs=state.jobs.slice(0,20);state.active=j.id;state.result=j.id;refresh();$('#latest-result')?.scrollIntoView({block:'nearest',behavior:'smooth'});poll(j.id);}
+  catch(e){if(e.message!=='CONNECTION')state.active=null;refresh();showError(e.message);}
 }
-let pickerTarget=null,pickerData=null;
-async function openPicker(target,kind){
-  pickerTarget={target,kind};const dialog=$('#picker');
-  dialog.innerHTML=`<div class="picker-head"><h2 id="picker-title">${T('选择本机路径','Choose a local path')}</h2><button class="icon-button" data-action="picker-close" aria-label="${T('关闭','Close')}">${icon('close')}</button></div><div class="picker-tools"><select id="picker-root" aria-label="${T('根目录','Root directory')}">${state.config.browse_roots.map(r=>`<option>${esc(r)}</option>`).join('')}</select><button class="icon-button" data-action="picker-up" aria-label="${T('上一级','Parent directory')}">${icon('up')}</button></div><div class="picker-address"><input id="picker-address" aria-label="${T('目录路径','Directory path')}" placeholder="${T('输入目录路径','Enter a directory path')}"><button class="small-btn" data-action="picker-go">${T('前往','Go')}</button></div><div class="picker-path" id="picker-path"></div><div class="file-list" id="file-list"></div><div class="picker-bottom">${kind==='output'||kind==='directory'?`<input id="picker-filename" aria-label="${T('新名称（可选）','New name (optional)')}" placeholder="${kind==='output'?T('新文件名，例如 signed.wasm','New filename, e.g. signed.wasm'):T('新目录名，或留空选当前目录','New directory name, or blank for current directory')}"><button class="small-btn" data-action="picker-choose">${T('使用此路径','Use this path')}</button>`:`<input id="picker-filter" aria-label="${T('筛选名称','Filter names')}" placeholder="${T('筛选当前目录…','Filter this directory…')}">`}</div><div class="picker-caption">${T('也可以直接在表单输入绝对路径。','You can also enter an absolute path directly in the form.')}</div>`;
-  dialog.showModal();await loadDirectory(state.config.browse_roots[0]);
+async function poll(id) {
+  try {const j=await api('/api/jobs/'+id);state.jobs=state.jobs.map(old=>old.id===id?j:old);if(j.state!=='running')state.active=null;refresh();if(j.state==='running')setTimeout(()=>poll(id),500);}
+  catch(e){showError(e.message);}
 }
-async function loadDirectory(path){
-  $('#file-list').textContent=T('正在读取目录…','Reading directory…');
-  try {pickerData=await api('/api/browse',{path});$('#picker-path').textContent=pickerData.path;$('#picker-address').value=pickerData.path;$('#picker-filter')&&($('#picker-filter').value='');renderFiles();}
-  catch(e){pickerData=null;$('#file-list').innerHTML=`<div class="error">${esc(e.message)}</div>`;}
+async function nextOperation(id,action) {
+  if(busy())return;
+  try {remember();const next=await api('/api/jobs/'+id+'/next',{action});Object.assign(state.files,next.files);state.forms[next.command]=action==='use-policy'?{...state.forms.sign,...next.fields}:next.fields;state.page=next.command;state.step=1;state.advanced=action==='append';state.result=null;state.error='';render();window.scrollTo({top:0});}
+  catch(e){showError(e.message);}
 }
-function renderFiles(){if(!pickerData)return;const filter=$('#picker-filter')?.value.toLowerCase()||'';$('#file-list').innerHTML=pickerData.entries.filter(e=>e.name.toLowerCase().includes(filter)).map(e=>`<button class="file-row" data-action="picker-entry" data-path="${esc(e.path)}" data-kind="${e.kind}">${icon(e.kind==='directory'?'folder':'file')}<span>${esc(e.name)}</span>${e.kind==='directory'?'<small>↗</small>':''}</button>`).join('')||`<p class="picker-caption">${T('此目录下没有匹配项。','No matching entries in this directory.')}</p>`;if(pickerData.truncated)$('#file-list').insertAdjacentHTML('beforeend',`<p class="picker-caption">${T('目录条目超过 1,000 个，请直接输入更具体的路径。','Directory exceeds 1,000 entries. Type a more specific path.')}</p>`);}
-function choosePath(path){const el=$('#f-'+pickerTarget.target);if(pickerTarget.kind==='paths')el.value=(el.value?el.value.trim()+'\n':'')+path;else el.value=path;$('#picker').close();remember();updateSummary();el.focus();}
-function updateSummary(){const el=$('#summary-list');if(el)el.innerHTML=summaryHTML();state.preview='';if($('#command-preview'))$('#command-preview').hidden=true;}
-function connectionScreen(error=''){
+function connectionScreen(code='') {
   document.documentElement.lang=state.lang==='zh'?'zh-CN':'en-US';
-  $('#app').innerHTML=`<div class="connection-screen"><section class="connection-card"><button class="language" data-action="language-connect">${T('EN / 中','中 / EN')}</button><img src="/mark.svg" alt=""><h1>WSEA Studio</h1><p>${T('打开终端显示的会话链接，或粘贴本次启动的令牌。','Open the session link from the terminal, or paste the startup token below.')}</p><form id="connect-form"><label for="session-token">${T('本地会话令牌','Local session token')}</label><input id="session-token" type="password" autocomplete="off" required spellcheck="false"><button type="submit" class="run-btn">${T('连接本机程序','Connect to local binary')}${icon('arrow')}</button></form>${error?`<div class="error" role="alert">${esc(error)}</div>`:''}<p class="field-hint">${T('刷新页面后，请重新使用会话链接。','After refreshing, use the session link again.')}</p></section></div>`;
+  $('#app').innerHTML=`<main class="connection"><section class="work-card"><button class="language" data-action="language-connect">${T('EN','中文')}</button><img src="/mark.svg" alt=""><h1>WSEA Studio</h1><p>${T('使用本次启动的会话链接，或输入会话令牌。','Use the current session link or enter the session token.')}</p><form id="connect-form"><label for="session-token">${T('会话令牌','Session token')}</label><input id="session-token" type="password" required autocomplete="off"><button class="primary">${T('连接','Connect')}${icon('arrow')}</button></form>${code?`<p class="error">${errors(code)}</p>`:''}</section></main>`;
 }
-async function connect(token){state.token=token;try{state.config=await api('/api/config');state.jobs=state.config.jobs;state.active=state.config.active_job;render();if(state.active){state.result=state.active;refreshResult();poll(state.active);}}catch(e){state.config=null;connectionScreen(e.message);}}
-
-document.addEventListener('submit',event=>{event.preventDefault();if(event.target.id==='connect-form'){connect($('#session-token').value.trim());return;}if(event.target.id==='operation-form'){remember();launch();}});
-document.addEventListener('input',event=>{if(event.target.id==='picker-filter')renderFiles();else if(event.target.closest('#operation-form')){remember();updateSummary();}});
-document.addEventListener('change',event=>{if(event.target.id==='picker-root')loadDirectory(event.target.value);if(event.target.id==='f-in-place'){toggleInPlace();remember();updateSummary();}});
-document.addEventListener('keydown',event=>{if(event.target.id==='picker-address'&&event.key==='Enter'){event.preventDefault();loadDirectory(event.target.value);}});
-document.addEventListener('click',async event=>{
-  const b=event.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;
-  if(action==='navigate')navigate(b.dataset.page);
-  else if(action==='language'||action==='language-connect'){remember();state.lang=state.lang==='zh'?'en':'zh';if(state.config)render();else connectionScreen();}
-  else if(action==='mode'){remember();state.mode=b.dataset.mode;state.error='';state.preview='';render();}
-  else if(action==='preview'){remember();if(!$('#operation-form').reportValidity())return;try{const preview=await api('/api/preview',{command:state.page,fields:state.forms[state.page]});state.preview=preview.display;$('#command-preview').textContent=preview.display;$('#command-preview').hidden=false;}catch(e){showError(e.message);}}
-  else if(action==='browse')openPicker(b.dataset.field,b.dataset.kind);
-  else if(action==='picker-close')$('#picker').close();
-  else if(action==='picker-up'&&pickerData?.parent)loadDirectory(pickerData.parent);
-  else if(action==='picker-go')loadDirectory($('#picker-address').value);
-  else if(action==='picker-entry'){if(b.dataset.kind==='directory')loadDirectory(b.dataset.path);else if(pickerTarget.kind!=='directory')choosePath(b.dataset.path);}
-  else if(action==='picker-choose'&&pickerData){const name=$('#picker-filename').value;if(pickerTarget.kind==='output'&&!name){toast(T('请填写新文件名。','Enter a new filename.'));return;}if(name==='.'||name==='..'||/[\\/\x00-\x1f]/.test(name)){toast(T('请输入一个文件或目录名称。','Enter a single file or directory name.'));return;}choosePath(pickerData.path+(name?(pickerData.path.endsWith('/')||pickerData.path.endsWith('\\')?'':pickerData.path.includes('\\')?'\\':'/')+name:''));}
-  else if(action==='show-job'){state.result=b.dataset.id;refreshResult();$('#latest-result')?.scrollIntoView({block:'start',behavior:'smooth'});}
-  else if(action==='continue-sign')continueSign(b.dataset.id);
-  else if(action==='verify-artifact'){const j=state.jobs.find(j=>j.id===b.dataset.id);remember();state.forms.verify={module:j.fields.output||j.fields.module,policy:j.fields.policy};state.page='verify';state.result=null;state.error='';state.preview='';render();window.scrollTo({top:0});}
-  else if(action==='copy-result'){const j=state.jobs.find(j=>j.id===b.dataset.id);copy(j.stdout+(j.stderr?'\n'+j.stderr:''));}
-  else if(action==='version')launch('version',{});
+async function connect(token) {state.token=token;try{state.config=await api('/api/config');state.jobs=state.config.jobs;state.active=state.config.active_job;state.picking=state.config.selection;render();if(state.active){state.result=state.active;refresh();poll(state.active);}if(state.picking)pollSelection(state.picking,null);}catch(e){state.config=null;connectionScreen(e.message);}}
+document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='connect-form')connect($('#session-token').value.trim());else if(e.target.id==='operation-form')launch();});
+document.addEventListener('input',e=>{if(e.target.closest('#operation-form'))remember();});
+document.addEventListener('change',e=>{if(e.target.name==='in-place'){remember();render();}if(e.target.id==='f-mode'){remember();state.forms.sign['append-signature']=e.target.value==='append';state.forms.sign['replace-signature']=e.target.value==='replace';}});
+document.addEventListener('toggle',e=>{if(e.target.id==='advanced')state.advanced=e.target.open;},true);
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-action]');if(!b)return;e.preventDefault();const a=b.dataset.action;
+  if(a==='navigate')navigate(b.dataset.page);
+  else if(a==='reconnect'){try{const c=await api('/api/config');state.jobs=c.jobs;state.active=c.active_job;state.picking=c.selection;state.error='';if(state.result&&!state.jobs.some(j=>j.id===state.result))state.result=null;render();if(state.active)poll(state.active);if(state.picking)pollSelection(state.picking,state.selectionTarget);}catch(e){showError(e.message);}}
+  else if(a==='language'||a==='language-connect'){remember();state.lang=state.lang==='zh'?'en':'zh';state.config?render():connectionScreen();}
+  else if(a==='step'){remember();if(Number(b.dataset.step)===2&&!validateFiles())return;state.step=Number(b.dataset.step);state.error='';render();}
+  else if(a==='select-file')selectFile(b.dataset.field,b.dataset.many==='true');
+  else if(a==='remove-file'){remember();const f=state.forms[state.page],v=f[b.dataset.field];if(Array.isArray(v))v.splice(Number(b.dataset.index),1);else delete f[b.dataset.field];render();}
+  else if(a==='validity'){remember();state.forms.sign['not-before']=stamp(Date.now()-60000);state.forms.sign['not-after']=stamp(Date.now()+Number(b.dataset.days)*86400000);render();}
+  else if(a==='new-sign'){remember();state.forms.sign=defaults().sign;state.step=1;state.advanced=false;state.page='sign';state.error='';state.result=null;render();window.scrollTo({top:0});}
+  else if(a==='show-job'){state.result=b.dataset.id;refresh();$('#latest-result')?.scrollIntoView({block:'nearest',behavior:'smooth'});}
+  else if(a==='next-operation')nextOperation(b.dataset.id,b.dataset.next);
+  else if(a==='copy-json'){const j=state.jobs.find(j=>j.id===b.dataset.id);try{await navigator.clipboard.writeText(JSON.stringify(j.document,null,2));toast(T('已复制 JSON 结果','JSON result copied'));}catch{toast(T('浏览器未允许复制。','Clipboard access unavailable.'));}}
 });
-const initialToken=new URLSearchParams(location.hash.slice(1)).get('token');
+const token=new URLSearchParams(location.hash.slice(1)).get('token');
 if(location.hash)history.replaceState(null,'',location.pathname);
-if(initialToken)connect(initialToken);else connectionScreen();
+if(token)connect(token);else connectionScreen();

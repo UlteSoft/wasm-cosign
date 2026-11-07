@@ -16,9 +16,9 @@ import os
 from pathlib import Path
 import re
 import secrets
-import shlex
 import signal
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,13 +56,23 @@ SCHEMAS = {
         "minimum-version": "uint", "minimum-epoch": "uint", "capabilities": "mask",
         "max-crl-age-seconds": "uint", "max-module-bytes": "uint",
     },
-    "help": {"topic": "topic"},
-    "version": {},
 }
 
 
 class InputError(ValueError):
     pass
+
+
+PUBLIC_COMMANDS = ("sign", "verify", "fetch", "policy-init", "policy-update")
+
+
+def file_role(command, field):
+    """Opaque capabilities are scoped to a file's purpose, not arbitrary paths."""
+    if command not in PUBLIC_COMMANDS or SCHEMAS[command].get(field, "").rstrip("!") not in ("path", "paths"):
+        raise InputError("INVALID_FIELD")
+    if field == "output":
+        return "policy-output" if command == "policy-init" else "module-output"
+    return "certificate" if field == "additional-certificate" else field
 
 
 def clean_path(value: str) -> str:
@@ -136,14 +146,7 @@ def build_argv(binary: str, command: str, fields: dict) -> list[str]:
                 valid = False
             if not valid:
                 raise InputError("url: use an HTTPS URL without credentials or a fragment.")
-        elif kind == "topic" and value not in ("root", "secure", "sign", "verify", "fetch", "policy-init", "policy-update"):
-            raise InputError("Unknown help topic.")
         values[name] = value
-    if command == "version":
-        return [binary, "version"]
-    if command == "help":
-        topic = values.get("topic", "secure")
-        return [binary, *([] if topic == "root" else ["wasm", "secure"]), *([] if topic in ("root", "secure") else [topic]), "--help"]
     if command == "sign":
         if values.get("append-signature") and values.get("replace-signature"):
             raise InputError("Append and replace are mutually exclusive.")
@@ -175,10 +178,6 @@ def build_argv(binary: str, command: str, fields: dict) -> list[str]:
     if positional is not None:
         args += ["--", positional]
     return args
-
-
-def display_command(argv: list[str]) -> str:
-    return subprocess.list2cmdline(argv) if os.name == "nt" else shlex.join(argv)
 
 
 def stop_process(process: subprocess.Popen) -> None:
@@ -249,133 +248,264 @@ def run_bounded(argv: list[str], timeout: float, stop: threading.Event | None = 
             "seconds": round(time.monotonic() - started, 3)}
 
 
-def exact_json(value):
-    """Keep uint64 manifest fields exact in browsers (no floating-point loss)."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, list):
-        return [exact_json(v) for v in value]
-    if isinstance(value, dict):
-        return {k: exact_json(v) for k, v in value.items()}
-    return value
+def strict_json(raw):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate field")
+            result[key] = value
+        return result
+    def invalid(_):
+        raise ValueError("Non-JSON number")
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=invalid)
+
+
+def public_manifest(document):
+    """Positive schema: never forward a native JSON object wholesale."""
+    m = document["manifest"]
+    if not isinstance(m, dict) or m.get("embedded") is not True:
+        raise ValueError()
+    ident = m.get("module_id")
+    if not isinstance(ident, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", ident):
+        raise ValueError()
+    result = {"module_id": ident}
+    for field in ("version", "security_epoch", "capabilities", "not_before", "not_after"):
+        v = m[field]
+        if type(v) is not int or not 0 <= v <= 2**64 - 1:
+            raise ValueError()
+        result[field] = str(v)
+    if m["version"] == 0 or m["capabilities"] > 63 or m["not_after"] <= m["not_before"]:
+        raise ValueError()
+    algs, signers = m["signature_algorithms"], m["signer_spkis"]
+    if (not isinstance(algs, list) or not 1 <= len(algs) <= 8 or any(a not in ALGORITHMS for a in algs)
+            or not isinstance(signers, list) or not 1 <= len(signers) <= len(algs)
+            or any(not isinstance(s, str) or not re.fullmatch(r"[a-f0-9]{64}", s) for s in signers)
+            or len(set(signers)) != len(signers)):
+        raise ValueError()
+    result.update(signature_algorithms=algs, signer_count=len(signers))
+    return result
+
+
+def native_error(stderr):
+    # Only fixed codes cross HTTP; never the surrounding message or path.
+    match = re.match(r"(?:Error: )?((?:SIG_00[1-5]|CERT_00[1-6]|POL_00[1-4]|VM_001)):", stderr)
+    return match[1] if match else "OPERATION_FAILED"
+
+
+def choose_local_file(role, language, stop):
+    # A separate desktop process owns the OS dialog and its path. The browser
+    # never enumerates a directory, uploads a key, or supplies a filesystem path.
+    r = run_bounded([sys.executable, str(Path(__file__).with_name("native_picker.py")),
+                     role, language], 300, stop, output_limit=8192)
+    if r["exit_code"] == 2 and not r["interrupted"]:
+        return None
+    if r["exit_code"] != 0 or r["interrupted"]:
+        raise InputError("PICKER_UNAVAILABLE")
+    return strict_json(r["stdout"])["path"]
 
 
 class Application:
-    def __init__(self, binary: Path, browse_roots: list[Path], timeout: int = 120):
+    def __init__(self, binary: Path, timeout: int = 120, picker=choose_local_file):
         self.binary = str(binary.resolve(strict=True))
         if not Path(self.binary).is_file() or not os.access(self.binary, os.X_OK):
             raise InputError("--binary must be an existing executable file.")
         probe = run_bounded([self.binary, "version"], min(timeout, 10), output_limit=4096)
-        self.version = probe["stdout"].strip()
-        if probe["exit_code"] != 0 or probe["interrupted"] or not re.fullmatch(r"wasm-cosign [^\r\n]+ WSEA v2", self.version):
+        if (probe["exit_code"] != 0 or probe["interrupted"]
+                or not re.fullmatch(r"wasm-cosign [^\r\n]+ WSEA v2", probe["stdout"].strip())):
             raise InputError("The supplied executable did not identify itself as wasm-cosign WSEA v2.")
-        self.roots = list(dict.fromkeys(str(p.resolve(strict=True)) for p in browse_roots))
-        if not self.roots or any(not Path(p).is_dir() for p in self.roots):
-            raise InputError("--browse-root must name existing directories.")
         self.timeout = timeout
+        self.picker = picker
         self.token = secrets.token_urlsafe(32)
         self.stop = threading.Event()
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        # Public jobs and private execution inputs are deliberately separate.
         self.jobs = collections.OrderedDict()
+        self.inputs = {}
+        self.files = {}
+        self.selections = collections.OrderedDict()
         self.active = None
+        self.selecting = None
         self.worker = None
+        self.picker_worker = None
 
     def config(self):
         with self.lock:
-            return {"binary": self.binary, "version": self.version, "algorithms": ALGORITHMS,
-                    "browse_roots": self.roots, "timeout": self.timeout, "active_job": self.active,
-                    "commands": list(SCHEMAS), "jobs": list(self.jobs.values())[::-1]}
+            return {"algorithms": ALGORITHMS, "active_job": self.active,
+                    "selection": self.selecting, "jobs": list(self.jobs.values())[::-1]}
+
+    def register_file(self, path, role):
+        """Only desktop selection / successful native output calls this method."""
+        if not isinstance(path, str) or len(path) > 4096 or any(ord(c) < 32 for c in path):
+            raise InputError("FILE_UNAVAILABLE")
+        path = clean_path(path)
+        if role in ("module-output", "policy-output", "state-dir"):
+            if not Path(path).parent.is_dir():
+                raise InputError("FILE_UNAVAILABLE")
+        elif not Path(path).is_file():
+            raise InputError("FILE_UNAVAILABLE")
+        with self.lock:
+            if len(self.files) >= 512:
+                raise InputError("SESSION_FULL")
+            ident = secrets.token_hex(16)
+            self.files[ident] = {"path": path, "role": role}
+            return {"id": ident, "name": Path(path).name}
+
+    def resolve_fields(self, command, fields):
+        if command not in PUBLIC_COMMANDS or not isinstance(fields, dict) or set(fields) - set(SCHEMAS[command]):
+            raise InputError("INVALID_INPUT")
+        result = dict(fields)
+        for field, spec in SCHEMAS[command].items():
+            if spec.rstrip("!") not in ("path", "paths") or fields.get(field) in (None, "", []):
+                continue
+            many = spec == "paths"
+            refs = fields[field] if many else [fields[field]]
+            if not isinstance(refs, list) or len(refs) > 7:
+                raise InputError("INVALID_SELECTION")
+            resolved = []
+            for ref in refs:
+                entry = self.files.get(ref) if isinstance(ref, str) else None
+                if not entry or entry["role"] != file_role(command, field):
+                    raise InputError("INVALID_SELECTION")
+                resolved.append(entry["path"])
+            result[field] = resolved if many else resolved[0]
+        return result
+
+    def select_file(self, command, field, language):
+        role = file_role(command, field)
+        if language not in ("zh", "en"):
+            raise InputError("INVALID_INPUT")
+        with self.lock:
+            if self.active or self.selecting or self.stop.is_set():
+                raise InputError("BUSY")
+            ident = secrets.token_hex(12)
+            selection = {"id": ident, "state": "picking"}
+            self.selections[ident] = selection
+            while len(self.selections) > 20:
+                self.selections.popitem(last=False)
+            self.selecting = ident
+            self.picker_worker = threading.Thread(target=self._select, args=(ident, role, language), daemon=True)
+            self.picker_worker.start()
+            return dict(selection)
+
+    def _select(self, ident, role, language):
+        try:
+            path = self.picker(role, language, self.stop)
+            result = {"state": "selected", "file": self.register_file(path, role)} if path else {"state": "cancelled"}
+        except Exception:
+            result = {"state": "failed", "error": "PICKER_UNAVAILABLE"}
+        with self.lock:
+            self.selections[ident] = {"id": ident, **result}
+            self.selecting = None
+
+    def get_selection(self, ident):
+        with self.lock:
+            if ident not in self.selections:
+                raise InputError("NOT_FOUND")
+            return dict(self.selections[ident])
 
     def submit(self, command, fields):
-        argv = build_argv(self.binary, command, fields)
         with self.lock:
-            if self.active is not None or self.stop.is_set():
-                raise InputError("Another operation is running. Wait for its result before starting another.")
+            if self.active or self.selecting or self.stop.is_set():
+                raise InputError("BUSY")
+            resolved = self.resolve_fields(command, fields)
+            argv = build_argv(self.binary, command, resolved)
             ident = secrets.token_hex(12)
-            job = {"id": ident, "command": command, "fields": fields, "argv": argv,
-                   "display": display_command(argv), "state": "running", "started": time.time()}
+            job = {"id": ident, "command": command, "state": "running"}
             self.jobs[ident] = job
+            self.inputs[ident] = resolved
             while len(self.jobs) > 20:
-                self.jobs.popitem(last=False)
+                expired, _ = self.jobs.popitem(last=False)
+                self.inputs.pop(expired, None)
             self.active = ident
             self.worker = threading.Thread(target=self._execute, args=(ident, argv), daemon=True)
             self.worker.start()
-        return dict(job)
+            return dict(job)
 
     def close(self):
         self.stop.set()
+        for worker in (self.worker, self.picker_worker):
+            if worker is not None:
+                worker.join(timeout=6)
         with self.lock:
-            worker = self.worker
-        if worker is not None:
-            worker.join(timeout=6)
+            self.files.clear()
+            self.inputs.clear()
 
     def _execute(self, ident, argv):
-        result = run_bounded(argv, self.timeout, self.stop)
-        state = "failed"
-        document = None
-        if result["interrupted"]:
-            state = "interrupted"
-        elif result["exit_code"] == 0:
-            state = "succeeded"
-            if self.jobs[ident]["command"] in ("sign", "verify", "fetch"):
+        public = {"state": "failed", "error": "OPERATION_FAILED"}
+        try:
+            result = run_bounded(argv, self.timeout, self.stop)
+            command = self.jobs[ident]["command"]
+            if result["interrupted"]:
+                public = {"state": "interrupted", "error": "INTERRUPTED"}
+            elif result["exit_code"] != 0:
+                public["error"] = native_error(result["stderr"])
+            elif command in ("sign", "verify", "fetch"):
                 try:
-                    document = json.loads(result["stdout"])
+                    document = strict_json(result["stdout"])
                     status = document["status"]
-                    if status not in ("VERIFIED", "SIGNED_PARTIAL") or not isinstance(document["manifest"], dict):
+                    if status not in ("VERIFIED", "SIGNED_PARTIAL"):
                         raise ValueError()
-                    if status == "SIGNED_PARTIAL":
-                        if self.jobs[ident]["command"] != "sign" or not self.jobs[ident]["fields"].get("allow-partial"):
-                            raise ValueError()
-                        state = "partial"
-                except (ValueError, KeyError, TypeError):
-                    state = "failed"
-                    document = None
-                    result["protocol_error"] = "CLI returned unexpected verification output; no success is asserted."
-        with self.lock:
-            self.jobs[ident] = {**self.jobs[ident], **result, "state": state,
-                                "document": exact_json(document), "finished": time.time()}
-            self.active = None
+                    if status == "SIGNED_PARTIAL" and (command != "sign" or not self.inputs[ident].get("allow-partial")):
+                        raise ValueError()
+                    manifest = public_manifest(document)
+                    public = {"state": "partial" if status == "SIGNED_PARTIAL" else "succeeded",
+                              "document": {"status": status, "manifest": manifest}}
+                except (ValueError, KeyError, TypeError, RecursionError):
+                    public = {"state": "failed", "error": "INVALID_RESULT"}
+            else:
+                # Current native policy commands have no JSON flag. Their text
+                # contains local paths: discard it and map the exit status only.
+                public = {"state": "succeeded", "document": {"status": "COMPLETED"}}
+        except Exception:
+            public = {"state": "interrupted", "error": "INTERRUPTED"}
+        finally:
+            with self.lock:
+                self.jobs[ident] = {"id": ident, "command": self.jobs[ident]["command"], **public}
+                self.active = None
 
     def get_job(self, ident):
         with self.lock:
             if ident not in self.jobs:
-                raise InputError("Unknown or expired session operation.")
+                raise InputError("NOT_FOUND")
             return dict(self.jobs[ident])
 
-    def browse(self, path):
-        if not isinstance(path, str) or len(path) > 4096:
-            raise InputError("Invalid directory.")
-        target = Path(path).resolve(strict=True)
-        roots = [Path(p) for p in self.roots]
-        if not any(target == root or root in target.parents for root in roots):
-            raise InputError("Directory is outside the configured file-picker roots.")
-        entries = []
-        truncated = False
-        with os.scandir(target) as iterator:
-            for entry in iterator:
-                # No file contents, symlink navigation, or hidden executable commands.
-                if entry.is_symlink():
-                    continue
-                if len(entries) == 1000:
-                    truncated = True
-                    break
-                try:
-                    if entry.is_dir(follow_symlinks=False):
-                        kind = "directory"
-                    elif entry.is_file(follow_symlinks=False):
-                        kind = "file"
-                    else:
-                        continue
-                    entries.append({"name": entry.name, "path": str(target / entry.name), "kind": kind})
-                except OSError:
-                    continue
-        parent = target.parent
-        parent_allowed = parent != target and any(parent == r or r in parent.parents for r in roots)
-        return {"path": str(target), "parent": str(parent) if parent_allowed else None,
-                "entries": sorted(entries, key=lambda e: (e["kind"] != "directory", e["name"].lower())),
-                "truncated": truncated}
+    def next_operation(self, ident, action):
+        """Reuse selected inputs without sending paths, keys, or diagnostics."""
+        with self.lock:
+            job = self.get_job(ident)
+            if job["state"] not in ("succeeded", "partial") or self.active or self.selecting:
+                raise InputError("BUSY")
+            original = self.inputs[ident]
+            fields, files = {}, {}
+
+            def use(field, path, role):
+                selected = self.register_file(path, role)
+                files[selected["id"]] = selected["name"]
+                fields[field] = selected["id"]
+
+            if action in ("append", "verify") and job["command"] in ("sign", "fetch", "verify"):
+                use("module", original.get("output") or original["module"], "module")
+                use("policy", original["policy"], "policy")
+                command = "verify" if action == "verify" else "sign"
+                if action == "append":
+                    m = job["document"]["manifest"]
+                    # Format timestamps on the server, without JS number loss.
+                    try:
+                        times = {dst: dt.datetime.fromtimestamp(int(m[src]), dt.timezone.utc).isoformat().replace("+00:00", "Z")
+                                 for src, dst in (("not_before", "not-before"), ("not_after", "not-after"))}
+                    except (ValueError, OverflowError, OSError):
+                        raise InputError("INVALID_INPUT") from None
+                    fields.update({"module-id": m["module_id"], "module-version": m["version"],
+                                   "security-epoch": m["security_epoch"], "capabilities": m["capabilities"],
+                                   "algorithm": "ES256", "append-signature": True,
+                                   "allow-partial": job["state"] == "partial", **times})
+            elif action == "use-policy" and job["command"] in ("policy-init", "policy-update"):
+                use("policy", original.get("output") or original["policy"], "policy")
+                command = "sign"
+            else:
+                raise InputError("INVALID_INPUT")
+            return {"command": command, "fields": fields, "files": files}
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -422,6 +552,10 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # No request/token/path logs or persistent operation history.
 
+    def send_error(self, code, message=None, explain=None):
+        # BaseHTTPRequestHandler's HTML diagnostics are not part of our API.
+        self.respond(code, {"error": "REQUEST_REJECTED"})
+
     def respond(self, code, data, content_type="application/json; charset=utf-8"):
         raw = json.dumps(data, ensure_ascii=True).encode() if isinstance(data, (dict, list)) else data
         self.send_response(code)
@@ -443,20 +577,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def gate(self, authenticated=False):
         if self.headers.get_all("Host", []) != [self.server.authority]:
-            self.respond(403, {"error": "Use the exact loopback URL printed by the server."})
+            self.respond(403, {"error": "REQUEST_REJECTED"})
             return False
         origins = self.headers.get_all("Origin", [])
         if (origins and origins != [self.server.origin]) or self.headers.get("Sec-Fetch-Site") not in (None, "none", "same-origin"):
-            self.respond(403, {"error": "Cross-origin requests are not allowed."})
+            self.respond(403, {"error": "REQUEST_REJECTED"})
             return False
         if authenticated:
             auth = self.headers.get_all("Authorization", [])
             expected = "Bearer " + self.server.app.token
             if len(auth) != 1 or not hmac.compare_digest(auth[0].encode(), expected.encode()):
-                self.respond(401, {"error": "Open the session link printed in the server terminal."})
+                self.respond(401, {"error": "SESSION_REQUIRED"})
                 return False
             if self.command == "POST" and origins != [self.server.origin]:
-                self.respond(403, {"error": "A same-origin request is required."})
+                self.respond(403, {"error": "REQUEST_REJECTED"})
                 return False
         return True
 
@@ -468,8 +602,13 @@ class Handler(BaseHTTPRequestHandler):
         elif re.fullmatch(r"/api/jobs/[a-f0-9]{24}", self.path):
             try:
                 self.respond(200, self.server.app.get_job(self.path.rsplit("/", 1)[1]))
-            except InputError as exc:
-                self.respond(404, {"error": str(exc)})
+            except InputError:
+                self.respond(404, {"error": "NOT_FOUND"})
+        elif re.fullmatch(r"/api/selections/[a-f0-9]{24}", self.path):
+            try:
+                self.respond(200, self.server.app.get_selection(self.path.rsplit("/", 1)[1]))
+            except InputError:
+                self.respond(404, {"error": "NOT_FOUND"})
         elif self.path in ("/", "/app.js", "/style.css", "/mark.svg"):
             name, content_type = {"/": ("index.html", "text/html; charset=utf-8"),
                                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -477,7 +616,7 @@ class Handler(BaseHTTPRequestHandler):
                                   "/mark.svg": ("mark.svg", "image/svg+xml")}[self.path]
             self.respond(200, (STATIC / name).read_bytes(), content_type)
         else:
-            self.respond(404, {"error": "Not found."})
+            self.respond(404, {"error": "NOT_FOUND"})
 
     def do_POST(self):
         if not self.gate(True):
@@ -488,61 +627,53 @@ class Handler(BaseHTTPRequestHandler):
                 raise InputError("A single Content-Length is required; transfer encoding is not supported.")
             size = int(lengths[0])
             if size > MAX_BODY:
-                self.respond(413, {"error": "Request too large."})
+                self.respond(413, {"error": "REQUEST_TOO_LARGE"})
                 return
             if self.headers.get_content_type() != "application/json":
-                self.respond(415, {"error": "JSON is required."})
+                self.respond(415, {"error": "JSON_REQUIRED"})
                 return
             raw = self.rfile.read(size)
             if len(raw) != size:
                 raise InputError("Incomplete request.")
 
-            def unique_object(pairs):
-                result = {}
-                for key, value in pairs:
-                    if key in result:
-                        raise InputError("Duplicate JSON field.")
-                    result[key] = value
-                return result
-
-            data = json.loads(raw, object_pairs_hook=unique_object)
+            data = strict_json(raw)
             if not isinstance(data, dict):
                 raise InputError("Expected a JSON object.")
-            if self.path == "/api/browse":
-                if set(data) != {"path"}:
-                    raise InputError("Expected directory path only.")
-                self.respond(200, self.server.app.browse(data["path"]))
-            elif self.path in ("/api/preview", "/api/jobs"):
+            if self.path == "/api/selections":
+                if set(data) != {"command", "field", "language"}:
+                    raise InputError("INVALID_INPUT")
+                self.respond(202, self.server.app.select_file(data["command"], data["field"], data["language"]))
+            elif self.path == "/api/jobs":
                 if set(data) != {"command", "fields"}:
                     raise InputError("Expected command and fields only.")
-                argv = build_argv(self.server.app.binary, data["command"], data["fields"])
-                if self.path == "/api/preview":
-                    self.respond(200, {"argv": argv, "display": display_command(argv)})
-                else:
-                    self.respond(202, self.server.app.submit(data["command"], data["fields"]))
+                self.respond(202, self.server.app.submit(data["command"], data["fields"]))
+            elif re.fullmatch(r"/api/jobs/[a-f0-9]{24}/next", self.path):
+                if set(data) != {"action"}:
+                    raise InputError("INVALID_INPUT")
+                self.respond(200, self.server.app.next_operation(self.path.split("/")[3], data["action"]))
             else:
-                self.respond(404, {"error": "Not found."})
-        except (InputError, ValueError, UnicodeError, OSError, RecursionError) as exc:
-            self.respond(400, {"error": str(exc) or "Invalid request."})
+                self.respond(404, {"error": "NOT_FOUND"})
+        except (InputError, ValueError, UnicodeError, OSError, RecursionError, TypeError, KeyError) as exc:
+            allowed = {"BUSY", "INVALID_SELECTION", "FILE_UNAVAILABLE", "SESSION_FULL", "NOT_FOUND"}
+            code = str(exc) if isinstance(exc, InputError) and str(exc) in allowed else "INVALID_INPUT"
+            self.respond(400, {"error": code})
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True, help="Existing native wasm-cosign executable; never built or downloaded")
     parser.add_argument("--port", type=int, default=8765, help="Loopback HTTP port (0 selects a free port; default: 8765)")
-    parser.add_argument("--browse-root", type=Path, action="append", help="Allowed file-picker directory; repeatable, default: current directory. Not a CLI sandbox.")
     parser.add_argument("--timeout", type=int, default=120, help="Native command deadline in seconds (1..3600, default: 120)")
     args = parser.parse_args()
     if not 0 <= args.port <= 65535 or not 1 <= args.timeout <= 3600:
         parser.error("Invalid port or timeout.")
     os.umask(0o077)
     try:
-        app = Application(args.binary, args.browse_root or [Path.cwd()], args.timeout)
+        app = Application(args.binary, args.timeout)
         server = LocalServer(("127.0.0.1", args.port), app)
     except (OSError, InputError) as exc:
         parser.error(str(exc))
     print("WSEA Studio · local Web GUI", flush=True)
-    print(app.version, flush=True)
     print("Open this private session link in your browser:\n" + server.origin + "/#token=" + app.token, flush=True)
     print("Only 127.0.0.1 is bound. Ctrl+C stops the server. No automatic builds or downloads.", flush=True)
 
