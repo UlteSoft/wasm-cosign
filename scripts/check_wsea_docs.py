@@ -28,7 +28,8 @@ def anchors(text):
 def main():
     errors = []
     texts = {}
-    for name in DOCUMENTS:
+    names = (*DOCUMENTS, 'webgui/README.md', 'webgui/README.en_US.md', 'webgui/README.zh_CN.md')
+    for name in names:
         path = ROOT / name
         if not path.is_file() or path.is_symlink():
             errors.append(f'{name}: required ordinary documentation file missing')
@@ -49,7 +50,7 @@ def main():
                 errors.append(f'{name}: broken local link {link}')
             elif url.fragment and dest.suffix == '.md' and unquote(url.fragment) not in anchors(dest.read_text()):
                 errors.append(f'{name}: missing heading {link}')
-    for base in PAIRS:
+    for base in (*PAIRS, 'webgui/README'):
         names = [f'{base}.{locale}.md' for locale in ('en_US', 'zh_CN')]
         if not all(name in texts for name in names):
             continue
@@ -62,7 +63,7 @@ def main():
             errors.append(f'{base}: a language version appears incomplete')
     if errors:
         sys.exit('\n'.join(errors))
-    print(f'PASS: {len(PAIRS)} complete locale pairs; {len(DOCUMENTS)} product documents and local links')
+    print(f'PASS: {len(PAIRS)+1} complete locale pairs; {len(texts)} product documents and local links')
 
 
 if __name__ == '__main__':

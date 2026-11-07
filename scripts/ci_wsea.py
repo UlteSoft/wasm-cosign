@@ -87,6 +87,12 @@ def main():
         run(name, ['c++', '-std=c++20', '-O2', '-DUWVM_WSEA_OPENSSL=1', '-I' + str(u / 'src'),
                    '-I' + str(crypto / 'include'), source / src, crypto / 'libcrypto.a',
                    '-pthread', '-ldl', '-o', work / name])
+    run('webgui-boundaries', [sys.executable, 'webgui/tests/test_server.py'])
+    gui_fixtures = work / 'webgui-integration'
+    run('webgui-integration', [sys.executable, 'webgui/tests/integration.py', '--binary', work / 'cosign',
+                              '--uwvm-verifier', work / 'verifier', '--require-cgroup', '--output', gui_fixtures])
+    run('webgui-state', [sys.executable, 'webgui/tests/run_frontend.py', '--binary', work / 'cosign',
+                        '--fixtures', gui_fixtures, '--require-cgroup'])
     common = [str(cxx), '-std=c++2c', '-O1', '-g0', '-ferror-limit=2', '-Wno-undefined-inline',
               '-Wno-braced-scalar-init', '-DUWVM=2', '-DUWVM_USE_UWVM_INT', '-DUWVM_DISABLE_JIT',
               '-DUWVM_IMPORT_WASI', '-DUWVM_WSEA_OPENSSL=1', '-DUWVM_USE_THREAD_LOCAL=1',
@@ -137,6 +143,9 @@ def main():
     run('signing', [sys.executable, 'test/wsea/wasm_signing.py', *base, '--native-verifier', work / 'verifier',
                     '--native-cosign', work / 'cosign', '--uwvm', uwvm, '--output', work / 'signing'])
     run('host-security', [sys.executable, 'test/wsea/wasm_host_security.py', *base, '--output', work / 'host-security'])
+    if a.version:
+        run('package-webgui', [sys.executable, 'scripts/package_wsea_webgui.py',
+                              '--version', a.version, '--output', work / 'release'])
     after = probe.probe()
     if after['status'] != 'PASS' or after['cgroup_incarnation'] != before['cgroup_incarnation']:
         raise RuntimeError('cgroup changed during qualification')

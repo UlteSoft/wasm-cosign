@@ -8,8 +8,8 @@
 两者只签名／校验嵌入 WSEA v2 的 WASM。仓库保留历史 Sigstore 源码，但 OCI、容器、任意文件、
 旧 `wasm-cosign` 节及无关上游命令不进入产品。不得以 `go test ./...` 替代产品测试列表。
 
-原生发行验证使用 Go 1.26.8、C／C++20 编译器、Python 3.10+、Perl 5、make、ar、ranlib 和 pkg-config。
-可移植构建固定 Go 1.26.8、WASI SDK 34.0（LLVM 23.1.0-wasi-sdk）及 Binaryen 133。
+原生发行验证使用 Go 1.27.3、C／C++20 编译器、Python 3.10+、Perl 5、make、ar、ranlib 和 pkg-config。
+可移植构建固定 Go 1.27.3、WASI SDK 34.0（LLVM 23.1.0-wasi-sdk）及 Binaryen 133。
 CI 另使用 LLVM 22.1.8 构建真实 UWVM 解释器，并测试 Wasmtime 42.0.1、Node.js 22.22.3。
 固定下载地址与摘要记录在 `scripts/wsea_toolchains.json`。
 工具版本变化需要重新验证，不能只凭一次编译成功接受。

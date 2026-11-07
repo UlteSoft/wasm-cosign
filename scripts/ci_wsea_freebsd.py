@@ -18,8 +18,8 @@ from wsea_cross_support import cgroup_snapshot, download, finish_cgroup, private
 
 IMAGE_URL = 'https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz'
 IMAGE_SHA = 'e4ca4db889f8559c9b9dfcacc70405c038476f4b6d41649b152d3809a2ed9e1f'
-GO_URL = 'https://go.dev/dl/go1.26.8.freebsd-amd64.tar.gz'
-GO_SHA = '458adea37c17ce9a8754a0455fa43e84f27d7e7de3fee81041a13de40c766434'
+GO_URL = 'https://go.dev/dl/go1.27.3.freebsd-amd64.tar.gz'
+GO_SHA = 'c15c88d07d6b2d2db5df7b65d9b9c73d631ac4e787da04e2bef2a5b6952c2cbb'
 
 
 def snapshot(source, destination, version=None):

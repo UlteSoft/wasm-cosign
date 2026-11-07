@@ -147,7 +147,7 @@ SDK 操作上限为：完整模块 32 MiB、JSON 传输 96 MiB、策略／COSE 6
 
 ## 构建与验证
 
-发行使用 Go 1.26.8、WASI SDK 34.0（LLVM 23.1.0-wasi-sdk）、Binaryen 133 及未修改的捆绑 OpenSSL 3.5.9。
+发行使用 Go 1.27.3、WASI SDK 34.0（LLVM 23.1.0-wasi-sdk）、Binaryen 133 及未修改的捆绑 OpenSSL 3.5.9。
 不依赖 Emscripten 或第三方预编译 OpenSSL WASM。
 OpenSSL 原有 `__wasi__` 熵源路径调用 `random_get`；没有固定种子、RAND_status 绕过或宿主密码学替换。
 SDK 模拟进程 ID 仅用于 nonce 个性化，不能提供熵。

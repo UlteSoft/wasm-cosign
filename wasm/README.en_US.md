@@ -180,7 +180,7 @@ unchanged; this portable entry point exposes only sign/verify.
 
 ## Build and qualification
 
-The release uses Go 1.26.8, WASI SDK 34.0 (LLVM 23.1.0-wasi-sdk), Binaryen 133 and
+The release uses Go 1.27.3, WASI SDK 34.0 (LLVM 23.1.0-wasi-sdk), Binaryen 133 and
 unmodified vendored OpenSSL 3.5.9. Emscripten and third-party prebuilt OpenSSL
 WASM libraries are not required. OpenSSL's existing `__wasi__` entropy path calls
 `random_get`; no fixed seeds, RAND_status bypasses or host crypto substitutions

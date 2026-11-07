@@ -10,9 +10,9 @@ Sigstore source remains in the repository, but OCI, containers, blobs, legacy
 `wasm-cosign` sections and unrelated upstream commands are not compiled into
 these products. Do not replace the product test list with `go test ./...`.
 
-Native builds need Go 1.26.8 for release qualification, C/C++20 compilers,
+Native builds need Go 1.27.3 for release qualification, C/C++20 compilers,
 Python 3.10+, Perl 5, make, ar, ranlib and pkg-config. The portable build pins
-Go 1.26.8, WASI SDK 34.0 (LLVM 23.1.0-wasi-sdk) and Binaryen 133. CI additionally
+Go 1.27.3, WASI SDK 34.0 (LLVM 23.1.0-wasi-sdk) and Binaryen 133. CI additionally
 builds a real UWVM interpreter using LLVM 22.1.8 and tests Wasmtime 42.0.1 and
 Node.js 22.22.3. Pinned download URLs/digests live in `scripts/wsea_toolchains.json`.
 A version change requires qualification, not just a successful compiler invocation.

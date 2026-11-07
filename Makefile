@@ -203,7 +203,7 @@ ko-cosign: bundled-openssl
 ko-cosign-dev: bundled-openssl
 	$(create_kocache_path)
 	LDFLAGS="$(LDFLAGS)" GIT_HASH=$(GIT_HASH) GIT_VERSION=$(GIT_VERSION) \
-	KOCACHE=$(KOCACHE_PATH) KO_DEFAULTBASEIMAGE=gcr.io/distroless/static-debian12:debug-nonroot ko build --base-import-paths \
+	KOCACHE=$(KOCACHE_PATH) KO_DEFAULTBASEIMAGE=gcr.io/distroless/static-debian13:debug-nonroot ko build --base-import-paths \
 		--platform=$(KO_PLATFORM) --tags $(GIT_VERSION)-dev --tags $(GIT_HASH)-dev$(LATEST_TAG)-dev \
 		$(ARTIFACT_HUB_LABELS) --image-refs cosignDevImagerefs \
 		github.com/sigstore/cosign/v3/cmd/cosign
@@ -221,7 +221,7 @@ ko-local: bundled-openssl
 ko-local-dev: bundled-openssl
 	$(create_kocache_path)
 	KO_DOCKER_REPO=ko.local/cosign-dev LDFLAGS="$(LDFLAGS)" GIT_HASH=$(GIT_HASH) GIT_VERSION=$(GIT_VERSION) \
-	KOCACHE=$(KOCACHE_PATH) KO_DEFAULTBASEIMAGE=gcr.io/distroless/static-debian12:debug-nonroot ko build --base-import-paths --platform=$(KO_PLATFORM) \
+	KOCACHE=$(KOCACHE_PATH) KO_DEFAULTBASEIMAGE=gcr.io/distroless/static-debian13:debug-nonroot ko build --base-import-paths --platform=$(KO_PLATFORM) \
 		--tags $(GIT_VERSION) --tags $(GIT_HASH) \
 		$(ARTIFACT_HUB_LABELS) \
 		github.com/sigstore/cosign/v3/cmd/cosign

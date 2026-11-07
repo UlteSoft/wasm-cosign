@@ -11,9 +11,11 @@ import tarfile
 from package_wsea_wasm import TARGETS as WASM_TARGETS
 from build_wsea_release import TARGETS as NATIVE_TARGETS
 from wsea_documents import DOCUMENTS, ROOT
+from package_wsea_webgui import TARGET as GUI_TARGET, FILES as GUI_FILES
 
 NATIVE_FILES = {'cosign', 'LICENSE', 'LICENSE-OpenSSL.txt', 'LICENSE-UWVM.md', 'COMMANDS.md', 'README.txt', *DOCUMENTS}
-TARGETS = {**{k: NATIVE_FILES for k in NATIVE_TARGETS}, **{k: set(v) for k, v in WASM_TARGETS.items()}}
+TARGETS = {**{k: NATIVE_FILES for k in NATIVE_TARGETS}, **{k: set(v) for k, v in WASM_TARGETS.items()},
+           GUI_TARGET: set(GUI_FILES)}
 
 
 def main():
@@ -43,19 +45,23 @@ def main():
                 raise ValueError('archive contains unexpected files or sizes: ' + target)
             metadata = json.load(tar.extractfile(prefix + '/RELEASE.json'))
             if (metadata['version'] != a.version or metadata['target'] != target or
-                    metadata['source_revision'] != a.revision or metadata['uwvm_wsea_revision'] != partner or
-                    metadata['signature_container'] != 'uwvm.wsea.v2' or metadata['openssl'] != '3.5.9' or
-                    set(metadata['files']) != allowed):
+                    metadata['source_revision'] != a.revision or set(metadata['files']) != allowed):
                 raise ValueError('release provenance mismatch: ' + target)
+            if target == GUI_TARGET:
+                if metadata.get('requires_existing_binary') is not True:
+                    raise ValueError('GUI must use an existing native executable')
+            elif (metadata['uwvm_wsea_revision'] != partner or metadata['signature_container'] != 'uwvm.wsea.v2'
+                  or metadata['openssl'] != '3.5.9'):
+                raise ValueError('release security provenance mismatch: ' + target)
             for name, digest in metadata['files'].items():
                 data = tar.extractfile(prefix + '/' + name).read()
                 if hashlib.sha256(data).hexdigest() != digest:
                     raise ValueError('packaged file digest mismatch: ' + name)
-                if name in DOCUMENTS and data != (a.source_root / name).read_bytes():
+                if (name in DOCUMENTS or target == GUI_TARGET) and data != (a.source_root / name).read_bytes():
                     raise ValueError('packaged documentation differs from release commit: ' + name)
         sums.append(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name)
     (a.assets / 'SHA256SUMS').write_text('\n'.join(sorted(sums)) + '\n')
-    print(f'PASS: {len(TARGETS)} qualified target archives, exact production allowlists, paired provenance and bilingual documentation')
+    print(f'PASS: {len(TARGETS)-1} executable targets and independent Web GUI, exact allowlists, provenance and bilingual documentation')
 
 
 if __name__ == '__main__':

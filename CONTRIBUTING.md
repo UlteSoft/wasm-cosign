@@ -4,3 +4,6 @@
 
 Use the current WSEA product guide; retained upstream workflows are not this product's contract.
 请以当前 WSEA 产品指南为准；保留的上游流程不代表本产品约定。
+
+For contributions sent to Sigstore upstream, review its [AI policy](https://github.com/sigstore/.github/blob/main/AI_POLICY.md).
+向 Sigstore 上游提交贡献时，请先阅读其 [AI 贡献政策](https://github.com/sigstore/.github/blob/main/AI_POLICY.md)。

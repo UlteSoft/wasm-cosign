@@ -84,7 +84,7 @@ def main():
     opt_version = subprocess.check_output([str(optimizer), '--version'], text=True).strip()
     # The release toolchain is pinned in wasm/README.md. Do not silently qualify
     # new compilers/optimizers merely because they can emit a WASM binary.
-    if 'go1.26.8 ' not in go_version or 'version 23.1.0-wasi-sdk' not in versions['clang'] or opt_version != 'wasm-opt version 133 (version_133)':
+    if 'go1.27.3 ' not in go_version or 'version 23.1.0-wasi-sdk' not in versions['clang'] or opt_version != 'wasm-opt version 133 (version_133)':
         raise ValueError('unqualified compiler; use the documented pinned toolchains')
     crypto = out / 'crypto-build'
     artifacts = out / 'artifacts'

@@ -62,7 +62,7 @@ statically link the bundled OpenSSL and use their system C/C++ libraries.
 `wsea-cross-assets.yml` runs nine Linux configurations through actual QEMU 10.2+
 and builds/tests FreeBSD inside a disposable QEMU guest. The FreeBSD VM has 4 GiB
 RAM and two CPUs and inherits the host's 64 GiB zero-swap cgroup. Its official
-15.1 image and Go 1.26.8 archive are pinned by SHA-256. Guest dependencies are
+15.1 image and Go 1.27.3 archive are pinned by SHA-256. Guest dependencies are
 installed only inside its disposable overlay. The guest build uses an unprivileged
 account and SSH binds to host loopback. No persistent VM or persistent self-hosted
 runner is required.
@@ -181,3 +181,10 @@ update pins and repeat all relevant native/portable qualification. When changing
 compiler/runtime/action, review its official upstream release and digest, update
 the explicit pin and test actual artifacts. CI passing is evidence of its stated
 coverage; do not describe it as proof that all possible security defects are absent.
+
+## Local Web GUI archive
+
+Publication includes 15 executable targets and an independent `webgui` archive, for 16 archives total.
+The GUI contains only its Python server, desktop picker, static assets, bilingual guides and license;
+no executable or test files. Publication runs information-boundary, real-binary interoperability and
+frontend state tests. The validator rejects missing GUI assets, mixed revisions and unapproved files.

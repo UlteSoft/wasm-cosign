@@ -17,21 +17,29 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from validate_wsea_release import TARGETS, WASM_TARGETS  # noqa: E402
 from wsea_documents import DOCUMENTS  # noqa: E402
+from package_wsea_webgui import TARGET as GUI_TARGET  # noqa: E402
 
 
 class ReleaseGateTest(unittest.TestCase):
     def build(self, directory, mutation=None):
         for target, names in TARGETS.items():
             prefix = f'wasm-cosign-v0.2.1-{target}' if target in WASM_TARGETS else f'{target}-wasm-cosign-v0.2.1'
-            data = {name: (ROOT / name).read_bytes() if name in DOCUMENTS else b'synthetic gate-test data'
+            data = {name: (ROOT / name).read_bytes() if name in DOCUMENTS or target == GUI_TARGET else b'synthetic gate-test data'
                     for name in names}
             metadata = {'version': 'v0.2.1', 'target': target, 'signature_container': 'uwvm.wsea.v2',
                         'openssl': '3.5.9', 'source_revision': '1' * 40,
                         'uwvm_wsea_revision': (ROOT / 'scripts/wsea_uwvm_revision.txt').read_text().strip(),
                         'files': {name: hashlib.sha256(value).hexdigest() for name, value in data.items()}}
+            if target == GUI_TARGET:
+                metadata['requires_existing_binary'] = True
+                if mutation == 'gui-source':
+                    data['webgui/server.py'] += b'\n# changed after qualification\n'
+                    metadata['files']['webgui/server.py'] = hashlib.sha256(data['webgui/server.py']).hexdigest()
             if target == 'wasm32-js' and mutation == 'revision':
                 metadata['source_revision'] = '2' * 40
             data['RELEASE.json'] = json.dumps(metadata).encode()
+            if target == GUI_TARGET and mutation == 'gui-test':
+                data['webgui/tests/test_server.py'] = b'not a production artifact'
             if target == 'wasm32-js':
                 if mutation == 'key':
                     data['generated/private.pem'] = b'not a production artifact'
@@ -61,11 +69,14 @@ class ReleaseGateTest(unittest.TestCase):
             self.assertEqual(len((Path(d) / 'SHA256SUMS').read_text().splitlines()), len(TARGETS))
 
     def test_contaminated_or_mismatched_archives_are_refused(self):
-        for mutation in ('revision', 'key', 'translation', 'tamper', 'traversal', 'missing-target'):
+        for mutation in ('revision', 'key', 'translation', 'tamper', 'traversal', 'missing-target',
+                         'gui-source', 'gui-test', 'missing-gui'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as d:
                 self.build(Path(d), mutation)
                 if mutation == 'missing-target':
                     next(Path(d).glob('aarch64-*.tar.xz')).unlink()
+                elif mutation == 'missing-gui':
+                    next(Path(d).glob('webgui-*.tar.xz')).unlink()
                 self.assertNotEqual(self.gate(d).returncode, 0)
                 self.assertFalse((Path(d) / 'SHA256SUMS').exists())
 

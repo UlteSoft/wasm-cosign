@@ -24,7 +24,6 @@ defaults:
     shell: bash
 
 permissions: {}
-
 jobs:
   cip-test:
     name: attest / verify-attestation test
@@ -34,10 +33,9 @@ jobs:
     strategy:
       matrix:
         k8s-version:
-        - v1.30.x
-        - v1.31.x
-        - v1.32.x
-        - v1.33.x
+        - v1.35.x
+        - v1.36.x
+        - v1.37.x
         tuf-root:
         - remote
         - air-gap
@@ -47,7 +45,6 @@ jobs:
 
     env:
       KO_DOCKER_REPO: "registry.local:5000/policy-controller"
-      SCAFFOLDING_RELEASE_VERSION: "v0.7.24"
       GO111MODULE: on
       GOFLAGS: -ldflags=-s -ldflags=-w
       KOCACHE: ~/ko
@@ -77,10 +74,12 @@ jobs:
       run: |
         make cosign
 
+    - name: Extract version of scaffolding to use
+      run: echo "SCAFFOLDING_RELEASE_VERSION=$(awk '/sigstore\/scaffolding\/actions\/setup@/{print $NF; exit}' .github/workflows/kind-verify-attestation.yaml)" >> $GITHUB_ENV
+
     - name: Install cluster + sigstore
-      uses: sigstore/scaffolding/actions/setup@main
+      uses: sigstore/scaffolding/actions/setup@c9e7cb4a331fad6ff917e0f912a37035487f6d55 # v0.7.41
       with:
-        legacy-variables: "false"
         k8s-version: ${{ matrix.k8s-version }}
         version: ${{ env.SCAFFOLDING_RELEASE_VERSION }}
 
@@ -130,7 +129,7 @@ jobs:
       run: |
         ./cosign signing-config create \
             --fulcio="url=${FULCIO_URL},api-version=1,start-time=2024-01-01T00:00:00Z,operator=sigstore.dev" \
-            --rekor="url=${REKOR_URL},api-version=1,start-time=2024-01-01T00:00:00Z,operator=sigstore.dev" \
+            --rekor="url=${REKOR_URL},api-version=2,start-time=2024-01-01T00:00:00Z,operator=sigstore.dev" \
             --rekor-config="ANY" \
             --tsa="url=${TSA_URL}/api/v1/timestamp,api-version=1,start-time=2024-01-01T00:00:00Z,operator=sigstore.dev" \
             --tsa-config="EXACT:1" \
@@ -182,7 +181,7 @@ jobs:
 
     - name: Collect diagnostics
       if: ${{ failure() }}
-      uses: chainguard-dev/actions/kind-diag@84b1be4c638f12d4256ddddef17af98853b6d0d9 # v1.6.40
+      uses: chainguard-dev/actions/kind-diag@e94104128fff55b3c5e1831a8bbbf198603156f9 # v1.7.1
 
     - name: Create vuln attestation for it
       run: |
