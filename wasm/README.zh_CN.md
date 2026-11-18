@@ -90,6 +90,7 @@ const sdk = await createWsea({
   go: new globalThis.Go(),
 });
 const responseJSON = sdk.requestJSON(trustedRequestJSON);
+if (!sdk.validateExchangeJSON(trustedRequestJSON, responseJSON)) throw new Error('Invalid WSEA exchange');
 ```
 
 必须使用同一包内的 `wasm_exec.js`，不能换成其他 Go 版本。
@@ -104,6 +105,10 @@ wasmtime run --preload wsea_crypto=./wsea-crypto.wasm \
 低层传输接收一个 UTF-8 JSON 对象。`--stream` 以换行分隔请求，每行返回一个响应。
 流模式下预期拒绝通过 `status` 表示，不能只看进程退出状态，宿主必须检查每个响应。
 默认单请求模式在拒绝时非零退出。
+`--validate-request`、`--validate-response` 和 `--validate-exchange` 从标准输入读取一个文档，
+仅在契约验证通过时以零状态退出；`run-json.mjs` 和 WASI 前端均支持这些模式。
+交换文档包含 `request` 与 `response`，分别是原始 UTF-8 JSON 字节的标准 base64，
+从而精确保留空白与整数。
 
 JSON 传输模式名为 `wsea-sdk-1`，**不是新的签名容器**。
 二进制字段用标准 base64；成员名必须完全匹配、小写且区分大小写。
@@ -130,11 +135,20 @@ JSON 传输模式名为 `wsea-sdk-1`，**不是新的签名容器**。
 `not_before`、`not_after`、`abi: "uwvm2"` 和 `capabilities`。
 时间使用无符号 Unix 秒；长度和摘要根据实际未签名前缀计算。
 
-响应可以是带错误信息的 `REJECTED`、`SIGNED_PARTIAL`，或者包含认证清单 `manifest`、
-`checked_at` 和排他到期边界 `valid_until` 的 `VERIFIED_SNAPSHOT`。
-签名还返回 base64 模块。使用结果前，宿主必须再次检查当前受保护信任／状态、时钟回退及到期时间。
+每个响应的模式均为 `wsea-sdk-response-1`，并包含 `request_sha256`，即原始请求字节 SHA-256 的 base64。
+响应可以是带说明性错误的 `REJECTED`，或者包含 `operation`、认证清单 `manifest`、
+`checked_at` 和排他到期边界 `valid_until` 的 `VERIFIED_SNAPSHOT`。签名还返回 base64 模块。
+部分签名使用 `SIGNED_PARTIAL`，并包含相同快照字段和模块。
+错误文本仅用于诊断，不是稳定错误类别。请求摘要用于关联交换，不能认证响应。
+使用结果前，宿主必须再次检查当前受保护信任／状态、时钟回退及到期时间。
 `VERIFIED_SNAPSHOT` 永远不是 UWVM 执行凭据。
 运行时 trap、熵源失败、缺失导入或响应格式异常均须拒绝，不存在成功回退路径。
+
+`sdk.validateRequestJSON`、`sdk.validateResponseJSON` 和 `sdk.validateExchangeJSON` 接收 JSON 文本并返回布尔值，
+不将整数转换为 JavaScript 数值。`requestJSON` 和 WASI 前端均在返回前验证自身交换；交换验证关联原请求，
+并核对模块与清单的一致性。这些检查验证契约，不认证签名或信任；格式正确的历史快照仍可能已经过期。
+运行时 trap 和缺失响应会抛出异常，不会伪装为 `REJECTED` 结果。
+受保护文件适配器检查 SDK 交换后，输出其独立的 `wsea-file-result-1` 摘要。
 
 版本、epoch、能力位及时间戳均为 uint64 整数。应保留 JSON 原文或使用支持无损整数的 JSON 库。
 普通 JavaScript `JSON.parse`／`JSON.stringify` 往返会舍入大于 2^53-1 的整数，不能用于安全计数器。
@@ -160,7 +174,8 @@ SDK 模拟进程 ID 仅用于 nonce 个性化，不能提供熵。
 - [Binaryen 133 x86_64 Linux](https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz)：
   `2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489`
 
-本机 Linux 构建和验证使用经过确认的 64 GiB、零 swap cgroup。
+本机 Linux 构建和验证使用有效内存上限为有限正数、swap 上限为零的 cgroup。
+64 GiB 是可覆盖的 CI 默认值，并非最低要求；配置及实际资源记录见[测试指南](../doc/wsea-testing.zh_CN.md)。
 `TMPDIR`、`GOTMPDIR`、缓存、密钥和结果均放入项目已忽略的 `.tmp`。
 不能因工作目录可由组写入而关闭受保护路径检查。
 
