@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from wsea_cross_support import cgroup_snapshot, download, finish_cgroup, private_environment, private_path, sha
+from wsea_cross_support import cgroup_guard, download, private_environment, private_path, sha
 
 IMAGE_URL = 'https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz'
 IMAGE_SHA = 'e4ca4db889f8559c9b9dfcacc70405c038476f4b6d41649b152d3809a2ed9e1f'
@@ -56,143 +56,142 @@ def main():
     source, counterpart, work = a.source_root.resolve(), a.uwvm_root.resolve(), private_path(a.work)
     work.mkdir(parents=True, exist_ok=False)
     private_environment(work)
-    before = cgroup_snapshot()
-    product_revision = subprocess.check_output(['git', '-C', str(source), 'rev-parse', a.version + '^{commit}'], text=True).strip()
-    expected_partner = (source / 'scripts/wsea_uwvm_revision.txt').read_text().strip()
-    for tree, revision in ((source, product_revision), (counterpart, expected_partner)):
-        if (subprocess.check_output(['git', '-C', str(tree), 'status', '--porcelain']) or
-                subprocess.check_output(['git', '-C', str(tree), 'rev-parse', 'HEAD'], text=True).strip() != revision):
-            raise RuntimeError('clean pinned product/counterpart checkout required')
-    image = download(IMAGE_URL, IMAGE_SHA, work / 'image.qcow2.xz')
-    go = download(GO_URL, GO_SHA, work / 'go.tar.gz')
-    print('PASS: pinned FreeBSD image and Go toolchain', flush=True)
-    with lzma.open(image) as src, (work / 'base.qcow2').open('xb') as dest:
-        shutil.copyfileobj(src, dest, 1 << 20)
-    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b',
-                    str(work / 'base.qcow2'), str(work / 'overlay.qcow2'), '24G'], check=True)
-    source_tar = snapshot(source, work / 'source', a.version)
-    counterpart_tar = snapshot(counterpart, work / 'uwvm')
-    print('PASS: self-contained product and counterpart snapshots', flush=True)
-    key = work / 'ssh-key'
-    subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(key)], check=True)
-    seed = work / 'seed'
-    seed.mkdir()
-    setup = ('#!/bin/sh\nset -eu\nsysrc sshd_enable=YES\n'
-             'env ASSUME_ALWAYS_YES=yes pkg bootstrap\n'
-             'pkg install -y git python3 perl5 pkgconf gmake\ntouch /var/run/wsea-ready\n')
-    config = {'hostname': 'wsea-freebsd', 'ssh_pwauth': False,
-              'users': [{'name': 'wsea', 'homedir': '/home/wsea', 'shell': '/bin/sh', 'locked': False,
-                         'gecos': 'Disposable release builder',
-                         'ssh_authorized_keys': [key.with_suffix('.pub').read_text().strip()]}],
-              'package_update': False, 'package_upgrade': False,
-              'write_files': [
-                  {'path': '/etc/rc.conf.d/firstboot_pkg_upgrade', 'owner': 'root:wheel',
-                   'permissions': '0600', 'content': 'firstboot_pkg_upgrade_enable="NO"\n'},
-                  {'path': '/root/wsea-setup.sh', 'owner': 'root:wheel', 'permissions': '0700', 'content': setup}],
-              'runcmd': ['/bin/sh /root/wsea-setup.sh']}
-    (seed / 'user-data').write_text('#cloud-config\n' + json.dumps(config, indent=2) + '\n')
-    (seed / 'meta-data').write_text('instance-id: wsea-disposable-build\nlocal-hostname: wsea-freebsd\n')
-    subprocess.run(['genisoimage', '-quiet', '-output', str(work / 'seed.iso'), '-volid', 'cidata',
-                    '-joliet', '-rock', str(seed / 'user-data'), str(seed / 'meta-data')], check=True)
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = str(sock.getsockname()[1])
-    command = ['qemu-system-x86_64', '-machine', 'q35,accel=' + ('kvm' if kvm else 'tcg'),
-               '-cpu', 'host' if kvm else 'max', '-smp', '2', '-m', '4096', '-vga', 'none',
-               '-drive', 'file=' + str(work / 'overlay.qcow2') + ',if=virtio,format=qcow2',
-               '-drive', 'file=' + str(work / 'seed.iso') + ',media=cdrom,format=raw,readonly=on',
-               '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' + port + '-:22',
-               '-device', 'virtio-net-pci,netdev=net0,romfile=', '-display', 'none', '-monitor', 'none',
-               '-serial', 'file:' + str(work / 'serial.log')]
-    if a.qemu_data:
-        command += ['-L', str(a.qemu_data.resolve())]
-    if a.bios:
-        command += ['-bios', str(a.bios.resolve())]
-    options = ['-i', str(key), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
-               '-o', 'UserKnownHostsFile=' + str(work / 'known_hosts'), '-o', 'ConnectTimeout=5']
-    ssh = ['ssh', *options, '-p', port, 'wsea@127.0.0.1']
-    scp = ['scp', *options, '-P', port]
-    with (work / 'qemu.log').open('w') as log:
-        vm = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
-        try:
-            deadline = time.monotonic() + 900
-            while time.monotonic() < deadline:
-                if vm.poll() is not None:
-                    raise RuntimeError('FreeBSD QEMU exited; inspect private qemu.log')
-                result = subprocess.run([*ssh, 'test -f /var/run/wsea-ready'], capture_output=True, timeout=15)
-                if result.returncode == 0:
-                    break
-                print('Waiting for FreeBSD first-boot prerequisites', flush=True)
-                time.sleep(10)
-            else:
-                raise RuntimeError('FreeBSD prerequisites did not become ready')
-            print('PASS: FreeBSD first-boot prerequisites', flush=True)
-            for file, name in ((source_tar, 'source.tar.gz'), (counterpart_tar, 'uwvm.tar.gz'), (go, 'go.tar.gz')):
-                subprocess.run([*scp, str(file), 'wsea@127.0.0.1:/home/wsea/' + name], check=True, timeout=180)
-            guest = '/home/wsea/wasm-cosign'
-            script = f'''#!/bin/sh
-set -eu
-umask 077
-ulimit -c 0
-mkdir -p {guest}
-tar -xzf /home/wsea/source.tar.gz -C {guest}
-mkdir -p {guest}/.tmp/uwvm {guest}/.tmp/tools/bin {guest}/.tmp/tmp
-tar -xzf /home/wsea/uwvm.tar.gz -C {guest}/.tmp/uwvm
-tar -xzf /home/wsea/go.tar.gz -C {guest}/.tmp/tools
-cd {guest}
-ln -s /usr/local/bin/gmake .tmp/tools/bin/make
-export PATH="{guest}/.tmp/tools/bin:{guest}/.tmp/tools/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export TMPDIR="{guest}/.tmp/tmp" GOTMPDIR="{guest}/.tmp/tmp"
-export GOCACHE="{guest}/.tmp/go-cache" GOMODCACHE="{guest}/.tmp/go-modules"
-export UWVM2_ROOT="{guest}/.tmp/uwvm" GOMAXPROCS=2 WSEA_OPENSSL_JOBS=2
-export GOTOOLCHAIN=local GOENV=off PYTHONDONTWRITEBYTECODE=1
-test "$(git rev-parse HEAD)" = {product_revision}
-test "$(git -C .tmp/uwvm rev-parse HEAD)" = {expected_partner}
-go version
-uname -a
-python3 scripts/build_wsea_release.py --version {a.version} --target x86_64-freebsd15 --work .tmp/native/build --output .tmp/native/assets
-mkdir .tmp/native/extracted
-tar -xJf .tmp/native/assets/x86_64-freebsd15-wasm-cosign-{a.version}.tar.xz -C .tmp/native/extracted
-.tmp/native/extracted/x86_64-freebsd15-wasm-cosign-{a.version}/cosign version
-'''
-            script_path = work / 'build.sh'
-            script_path.write_text(script)
-            subprocess.run([*scp, str(script_path), 'wsea@127.0.0.1:/home/wsea/build.sh'], check=True)
-            # Keep the private transcript while showing actual guest build stages
-            # in the job console. A timeout must not hide the stage that stalled.
-            with subprocess.Popen(['tee', str(work / 'build.log')], stdin=subprocess.PIPE) as transcript:
-                try:
-                    subprocess.run([*ssh, '/bin/sh /home/wsea/build.sh'], stdout=transcript.stdin,
-                                   stderr=subprocess.STDOUT, check=True, timeout=2400)
-                finally:
-                    transcript.stdin.close()
-                    transcript.wait(timeout=10)
-                if transcript.returncode:
-                    raise RuntimeError('failed to record the FreeBSD build transcript')
-            assets = work / 'assets'
-            assets.mkdir()
-            name = 'x86_64-freebsd15-wasm-cosign-' + a.version + '.tar.xz'
-            subprocess.run([*scp, 'wsea@127.0.0.1:' + guest + '/.tmp/native/assets/' + name, str(assets / name)], check=True)
-            subprocess.run([*scp, 'wsea@127.0.0.1:' + guest + '/.tmp/native/build/product-tests.log',
-                            str(work / 'product-tests.log')], check=True)
-            finish_cgroup(before, work / 'cgroup.json')
-            (work / 'qualification.json').write_text(json.dumps({'status': 'PASS', 'source_revision': product_revision,
-                'uwvm_revision': expected_partner, 'archive_sha256': sha(assets / name),
-                'image_sha256': IMAGE_SHA, 'go_sha256': GO_SHA, 'acceleration': 'kvm' if kvm else 'tcg'}, indent=2) + '\n')
-            print('PASS: actual FreeBSD source build, product tests and packaged executable', flush=True)
-        except Exception:
-            for name in ('qemu.log', 'serial.log'):
-                path = work / name
-                if path.is_file():
-                    sys.stderr.write('\nFreeBSD diagnostic: ' + name + '\n' + path.read_text(errors='replace')[-12000:])
-            raise
-        finally:
-            vm.terminate()
+    with cgroup_guard(work / 'cgroup.json'):
+        product_revision = subprocess.check_output(['git', '-C', str(source), 'rev-parse', a.version + '^{commit}'], text=True).strip()
+        expected_partner = (source / 'scripts/wsea_uwvm_revision.txt').read_text().strip()
+        for tree, revision in ((source, product_revision), (counterpart, expected_partner)):
+            if (subprocess.check_output(['git', '-C', str(tree), 'status', '--porcelain']) or
+                    subprocess.check_output(['git', '-C', str(tree), 'rev-parse', 'HEAD'], text=True).strip() != revision):
+                raise RuntimeError('clean pinned product/counterpart checkout required')
+        image = download(IMAGE_URL, IMAGE_SHA, work / 'image.qcow2.xz')
+        go = download(GO_URL, GO_SHA, work / 'go.tar.gz')
+        print('PASS: pinned FreeBSD image and Go toolchain', flush=True)
+        with lzma.open(image) as src, (work / 'base.qcow2').open('xb') as dest:
+            shutil.copyfileobj(src, dest, 1 << 20)
+        subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b',
+                        str(work / 'base.qcow2'), str(work / 'overlay.qcow2'), '24G'], check=True)
+        source_tar = snapshot(source, work / 'source', a.version)
+        counterpart_tar = snapshot(counterpart, work / 'uwvm')
+        print('PASS: self-contained product and counterpart snapshots', flush=True)
+        key = work / 'ssh-key'
+        subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(key)], check=True)
+        seed = work / 'seed'
+        seed.mkdir()
+        setup = ('#!/bin/sh\nset -eu\nsysrc sshd_enable=YES\n'
+                 'env ASSUME_ALWAYS_YES=yes pkg bootstrap\n'
+                 'pkg install -y git python3 perl5 pkgconf gmake\ntouch /var/run/wsea-ready\n')
+        config = {'hostname': 'wsea-freebsd', 'ssh_pwauth': False,
+                  'users': [{'name': 'wsea', 'homedir': '/home/wsea', 'shell': '/bin/sh', 'locked': False,
+                             'gecos': 'Disposable release builder',
+                             'ssh_authorized_keys': [key.with_suffix('.pub').read_text().strip()]}],
+                  'package_update': False, 'package_upgrade': False,
+                  'write_files': [
+                      {'path': '/etc/rc.conf.d/firstboot_pkg_upgrade', 'owner': 'root:wheel',
+                       'permissions': '0600', 'content': 'firstboot_pkg_upgrade_enable="NO"\n'},
+                      {'path': '/root/wsea-setup.sh', 'owner': 'root:wheel', 'permissions': '0700', 'content': setup}],
+                  'runcmd': ['/bin/sh /root/wsea-setup.sh']}
+        (seed / 'user-data').write_text('#cloud-config\n' + json.dumps(config, indent=2) + '\n')
+        (seed / 'meta-data').write_text('instance-id: wsea-disposable-build\nlocal-hostname: wsea-freebsd\n')
+        subprocess.run(['genisoimage', '-quiet', '-output', str(work / 'seed.iso'), '-volid', 'cidata',
+                        '-joliet', '-rock', str(seed / 'user-data'), str(seed / 'meta-data')], check=True)
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            port = str(sock.getsockname()[1])
+        command = ['qemu-system-x86_64', '-machine', 'q35,accel=' + ('kvm' if kvm else 'tcg'),
+                   '-cpu', 'host' if kvm else 'max', '-smp', '2', '-m', '4096', '-vga', 'none',
+                   '-drive', 'file=' + str(work / 'overlay.qcow2') + ',if=virtio,format=qcow2',
+                   '-drive', 'file=' + str(work / 'seed.iso') + ',media=cdrom,format=raw,readonly=on',
+                   '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' + port + '-:22',
+                   '-device', 'virtio-net-pci,netdev=net0,romfile=', '-display', 'none', '-monitor', 'none',
+                   '-serial', 'file:' + str(work / 'serial.log')]
+        if a.qemu_data:
+            command += ['-L', str(a.qemu_data.resolve())]
+        if a.bios:
+            command += ['-bios', str(a.bios.resolve())]
+        options = ['-i', str(key), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
+                   '-o', 'UserKnownHostsFile=' + str(work / 'known_hosts'), '-o', 'ConnectTimeout=5']
+        ssh = ['ssh', *options, '-p', port, 'wsea@127.0.0.1']
+        scp = ['scp', *options, '-P', port]
+        with (work / 'qemu.log').open('w') as log:
+            vm = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:
-                vm.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                vm.kill()
-                vm.wait()
+                deadline = time.monotonic() + 900
+                while time.monotonic() < deadline:
+                    if vm.poll() is not None:
+                        raise RuntimeError('FreeBSD QEMU exited; inspect private qemu.log')
+                    result = subprocess.run([*ssh, 'test -f /var/run/wsea-ready'], capture_output=True, timeout=15)
+                    if result.returncode == 0:
+                        break
+                    print('Waiting for FreeBSD first-boot prerequisites', flush=True)
+                    time.sleep(10)
+                else:
+                    raise RuntimeError('FreeBSD prerequisites did not become ready')
+                print('PASS: FreeBSD first-boot prerequisites', flush=True)
+                for file, name in ((source_tar, 'source.tar.gz'), (counterpart_tar, 'uwvm.tar.gz'), (go, 'go.tar.gz')):
+                    subprocess.run([*scp, str(file), 'wsea@127.0.0.1:/home/wsea/' + name], check=True, timeout=180)
+                guest = '/home/wsea/wasm-cosign'
+                script = f'''#!/bin/sh
+    set -eu
+    umask 077
+    ulimit -c 0
+    mkdir -p {guest}
+    tar -xzf /home/wsea/source.tar.gz -C {guest}
+    mkdir -p {guest}/.tmp/uwvm {guest}/.tmp/tools/bin {guest}/.tmp/tmp
+    tar -xzf /home/wsea/uwvm.tar.gz -C {guest}/.tmp/uwvm
+    tar -xzf /home/wsea/go.tar.gz -C {guest}/.tmp/tools
+    cd {guest}
+    ln -s /usr/local/bin/gmake .tmp/tools/bin/make
+    export PATH="{guest}/.tmp/tools/bin:{guest}/.tmp/tools/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    export TMPDIR="{guest}/.tmp/tmp" GOTMPDIR="{guest}/.tmp/tmp"
+    export GOCACHE="{guest}/.tmp/go-cache" GOMODCACHE="{guest}/.tmp/go-modules"
+    export UWVM2_ROOT="{guest}/.tmp/uwvm" GOMAXPROCS=2 WSEA_OPENSSL_JOBS=2
+    export GOTOOLCHAIN=local GOENV=off PYTHONDONTWRITEBYTECODE=1
+    test "$(git rev-parse HEAD)" = {product_revision}
+    test "$(git -C .tmp/uwvm rev-parse HEAD)" = {expected_partner}
+    go version
+    uname -a
+    python3 scripts/build_wsea_release.py --version {a.version} --target x86_64-freebsd15 --work .tmp/native/build --output .tmp/native/assets
+    mkdir .tmp/native/extracted
+    tar -xJf .tmp/native/assets/x86_64-freebsd15-wasm-cosign-{a.version}.tar.xz -C .tmp/native/extracted
+    .tmp/native/extracted/x86_64-freebsd15-wasm-cosign-{a.version}/cosign version
+    '''
+                script_path = work / 'build.sh'
+                script_path.write_text(script)
+                subprocess.run([*scp, str(script_path), 'wsea@127.0.0.1:/home/wsea/build.sh'], check=True)
+                # Keep the private transcript while showing actual guest build stages
+                # in the job console. A timeout must not hide the stage that stalled.
+                with subprocess.Popen(['tee', str(work / 'build.log')], stdin=subprocess.PIPE) as transcript:
+                    try:
+                        subprocess.run([*ssh, '/bin/sh /home/wsea/build.sh'], stdout=transcript.stdin,
+                                       stderr=subprocess.STDOUT, check=True, timeout=2400)
+                    finally:
+                        transcript.stdin.close()
+                        transcript.wait(timeout=10)
+                    if transcript.returncode:
+                        raise RuntimeError('failed to record the FreeBSD build transcript')
+                assets = work / 'assets'
+                assets.mkdir()
+                name = 'x86_64-freebsd15-wasm-cosign-' + a.version + '.tar.xz'
+                subprocess.run([*scp, 'wsea@127.0.0.1:' + guest + '/.tmp/native/assets/' + name, str(assets / name)], check=True)
+                subprocess.run([*scp, 'wsea@127.0.0.1:' + guest + '/.tmp/native/build/product-tests.log',
+                                str(work / 'product-tests.log')], check=True)
+            except Exception:
+                for name in ('qemu.log', 'serial.log'):
+                    path = work / name
+                    if path.is_file():
+                        sys.stderr.write('\nFreeBSD diagnostic: ' + name + '\n' + path.read_text(errors='replace')[-12000:])
+                raise
+            finally:
+                vm.terminate()
+                try:
+                    vm.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    vm.kill()
+                    vm.wait()
+    (work / 'qualification.json').write_text(json.dumps({'status': 'PASS', 'source_revision': product_revision,
+        'uwvm_revision': expected_partner, 'archive_sha256': sha(assets / name),
+        'image_sha256': IMAGE_SHA, 'go_sha256': GO_SHA, 'acceleration': 'kvm' if kvm else 'tcg'}, indent=2) + '\n')
+    print('PASS: actual FreeBSD source build, product tests and packaged executable', flush=True)
 
 
 if __name__ == '__main__':

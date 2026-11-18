@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from wsea_cross_support import ROOT, cgroup_snapshot, download, finish_cgroup, private_environment, private_path, sha
+from wsea_cross_support import ROOT, cgroup_guard, download, private_environment, private_path, sha
 
 
 def prepare(target, directory):
@@ -76,41 +76,40 @@ def main():
     if not work.is_relative_to(source / '.tmp') or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', a.version):
         p.error('explicit version and source-owned .tmp work directory required')
     private_environment(work)
-    before = cgroup_snapshot()
-    revision = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
-    tagged = subprocess.check_output(['git', '-C', str(source), 'rev-parse', a.version + '^{commit}'], text=True).strip()
-    if revision != tagged:
-        raise RuntimeError('product checkout must match the immutable release tag')
-    pin, commands, spec = prepare(a.target, work / 'toolchain')
-    qemu = shutil.which(pin['qemu'])
-    if not qemu:
-        raise RuntimeError('required QEMU target is unavailable: ' + pin['qemu'])
-    version = subprocess.check_output([qemu, '--version'], text=True)
-    match = re.search(r'version (\d+)\.(\d+)', version)
-    if not match or tuple(map(int, match.groups())) < (10, 2):
-        raise RuntimeError('target qualification requires QEMU 10.2 or newer')
-    env = dict(os.environ, CC=commands['cc'], CXX=commands['cxx'], AR=commands['ar'],
-               RANLIB=commands['ranlib'], WSEA_OPENSSL_SPEC=str(spec), UWVM2_ROOT=str(a.uwvm_root.resolve()))
-    if pin['kind'] == 'tar':
-        # Buildroot rejects host /usr include paths. Keep the identical Go tree
-        # in private build space instead of disabling that isolation check.
-        go_root = Path(subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
-        shutil.copytree(go_root, work / 'go', symlinks=False)
-        env.update(GOROOT=str(work / 'go'), GOEXE=str(work / 'go/bin/go'))
-    output = work / 'assets'
-    subprocess.run([sys.executable, str(source / 'scripts/build_wsea_release.py'),
-        '--version', a.version, '--target', a.target, '--work', str(work / 'build'),
-        '--output', str(output), '--exec-prefix-json', json.dumps([qemu])], cwd=source, env=env, check=True)
-    archive = output / (a.target + '-wasm-cosign-' + a.version + '.tar.xz')
-    packaged = work / 'packaged'
-    packaged.mkdir()
-    with tarfile.open(archive) as tar:
-        tar.extractall(packaged, filter='data')
-    binary = packaged / archive.name.removesuffix('.tar.xz') / 'cosign'
-    actual = subprocess.check_output([qemu, str(binary), 'version'], env=env, text=True).strip()
-    if actual != 'wasm-cosign ' + a.version + ' WSEA v2':
-        raise RuntimeError('packaged target identity differs')
-    finish_cgroup(before, work / 'cgroup.json')
+    with cgroup_guard(work / 'cgroup.json'):
+        revision = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
+        tagged = subprocess.check_output(['git', '-C', str(source), 'rev-parse', a.version + '^{commit}'], text=True).strip()
+        if revision != tagged:
+            raise RuntimeError('product checkout must match the immutable release tag')
+        pin, commands, spec = prepare(a.target, work / 'toolchain')
+        qemu = shutil.which(pin['qemu'])
+        if not qemu:
+            raise RuntimeError('required QEMU target is unavailable: ' + pin['qemu'])
+        version = subprocess.check_output([qemu, '--version'], text=True)
+        match = re.search(r'version (\d+)\.(\d+)', version)
+        if not match or tuple(map(int, match.groups())) < (10, 2):
+            raise RuntimeError('target qualification requires QEMU 10.2 or newer')
+        env = dict(os.environ, CC=commands['cc'], CXX=commands['cxx'], AR=commands['ar'],
+                   RANLIB=commands['ranlib'], WSEA_OPENSSL_SPEC=str(spec), UWVM2_ROOT=str(a.uwvm_root.resolve()))
+        if pin['kind'] == 'tar':
+            # Buildroot rejects host /usr include paths. Keep the identical Go tree
+            # in private build space instead of disabling that isolation check.
+            go_root = Path(subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
+            shutil.copytree(go_root, work / 'go', symlinks=False)
+            env.update(GOROOT=str(work / 'go'), GOEXE=str(work / 'go/bin/go'))
+        output = work / 'assets'
+        subprocess.run([sys.executable, str(source / 'scripts/build_wsea_release.py'),
+            '--version', a.version, '--target', a.target, '--work', str(work / 'build'),
+            '--output', str(output), '--exec-prefix-json', json.dumps([qemu])], cwd=source, env=env, check=True)
+        archive = output / (a.target + '-wasm-cosign-' + a.version + '.tar.xz')
+        packaged = work / 'packaged'
+        packaged.mkdir()
+        with tarfile.open(archive) as tar:
+            tar.extractall(packaged, filter='data')
+        binary = packaged / archive.name.removesuffix('.tar.xz') / 'cosign'
+        actual = subprocess.check_output([qemu, str(binary), 'version'], env=env, text=True).strip()
+        if actual != 'wasm-cosign ' + a.version + ' WSEA v2':
+            raise RuntimeError('packaged target identity differs')
     (work / 'qualification.json').write_text(json.dumps({'status': 'PASS', 'target': a.target,
         'source_revision': revision, 'archive_sha256': sha(archive), 'qemu': version.strip(),
         'qemu_sha256': sha(qemu), 'toolchain_manifest_sha256': sha(ROOT / 'scripts/wsea_cross_toolchains.json')}, indent=2) + '\n')
