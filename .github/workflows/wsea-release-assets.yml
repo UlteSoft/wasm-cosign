@@ -35,6 +35,8 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       GOMAXPROCS: '2'
       WSEA_OPENSSL_JOBS: '3'
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,13 +89,20 @@ jobs:
           if [ "$RUNNER_OS" = Linux ]; then
             sudo systemd-run --unit="wsea-native-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
               --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
-              --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+              --property="MemoryMax=$WSEA_MEMORY_MAX" --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
+              --property=MemorySwapMax=0 \
               --property=TasksMax=512 --property=CPUQuota=200% /usr/bin/env PATH="$PATH" HOME="$HOME" \
               UWVM2_ROOT="$UWVM2_ROOT" TMPDIR="$TMPDIR" GOTMPDIR="$GOTMPDIR" GOCACHE="$GOCACHE" \
-              GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3 PYTHONDONTWRITEBYTECODE=1 "${command[@]}"
+              GOMAXPROCS=2 WSEA_OPENSSL_JOBS=3 PYTHONDONTWRITEBYTECODE=1 \
+              python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 2400 -- \
+              "${command[@]}"
           else
             "${command[@]}"
           fi
+      - name: Report cgroup resource usage
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wsea-native-${{ matrix.target }}

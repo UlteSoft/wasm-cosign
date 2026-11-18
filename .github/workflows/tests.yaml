@@ -19,6 +19,9 @@ jobs:
     name: Native tests / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     strategy:
       fail-fast: false
       matrix:
@@ -39,14 +42,30 @@ jobs:
           else
             brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
           fi
+      - name: Resource guard boundary tests
+        run: |
+          umask 077
+          mkdir -p .tmp/resource-tests
+          TMPDIR="$PWD/.tmp/resource-tests" PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_test.py
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo env PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_integration_test.py --parent /sys/fs/cgroup
+          fi
       - name: Product, race and generated CLI documentation tests
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
+            umask 077
+            mkdir -p .tmp
             sudo systemd-run --unit="wsea-unit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
               --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
-              --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+              --property="MemoryMax=$WSEA_MEMORY_MAX" --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
+              --property=MemorySwapMax=0 \
               --property=TasksMax=512 --property=CPUQuota=200% /usr/bin/env PATH="$PATH" HOME="$HOME" \
+              python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 1500 -- \
               bash scripts/test_wsea_native.sh
           else
             bash scripts/test_wsea_native.sh
           fi
+      - name: Report cgroup resource usage
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi

@@ -18,7 +18,7 @@ CI 另使用 LLVM 22.1.8 构建真实 UWVM 解释器，并测试 Wasmtime 42.0.1
 
 **所有**生成文件都使用项目已忽略的 `.tmp`：构建树、本任务下载的工具链、缓存、密钥、样本、日志与报告。
 工作目录及祖先目录不能由组或其他用户写入。
-以下环境应在已经通过准入的本机 Linux 64 GiB、零 swap cgroup 内使用；仅设置环境变量不会建立 cgroup。
+以下环境应在已经通过准入的本机 Linux 零 swap cgroup 内使用；仅设置环境变量不会建立 cgroup。
 
 ```sh
 umask 077
@@ -30,10 +30,11 @@ export PYTHONDONTWRITEBYTECODE=1
 export WSEA_OPENSSL_ROOT="$PWD/.tmp/work/openssl"
 ```
 
-检查真实进程成员关系、有效 `memory.max=68719476736`、`memory.swap.max=0` 及 OOM 计数。
-子进程须保持在同一 cgroup，限制任务并发和超时。准入失败时不得提高宿主上限或关闭检查。
-CI 在一次性 Linux systemd 单元中设置同样硬上限；macOS 原生任务运行于隔离的 GitHub 托管 runner，
-不将其宣称为 Linux cgroup 测试。详见[测试指南](wsea-testing.zh_CN.md)。
+实际有效内存上限须为有限正数，有效 swap 上限须为零；祖先可设置更紧的上限。
+记录真实 cgroup 配置、峰值和测试前后的 OOM 计数，子进程须保持在同一资源边界内，
+并限制任务并发和超时。CI 默认上限为 64 GiB，可通过仓库变量调整，并非最低要求。
+macOS 原生任务运行于隔离的 GitHub 托管 runner，不将其宣称为 Linux cgroup 测试。
+配置示例和记录方式见[测试指南](wsea-testing.zh_CN.md)。
 
 ## 共享校验器与固定 OpenSSL
 

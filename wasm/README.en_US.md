@@ -114,6 +114,7 @@ const sdk = await createWsea({
   go: new globalThis.Go(),
 });
 const responseJSON = sdk.requestJSON(trustedRequestJSON);
+if (!sdk.validateExchangeJSON(trustedRequestJSON, responseJSON)) throw new Error('Invalid WSEA exchange');
 ```
 
 Use the `wasm_exec.js` shipped in the same archive, not a different Go version.
@@ -129,6 +130,11 @@ The low-level transport accepts one UTF-8 JSON object. `--stream` processes
 newline-delimited requests with one response per line; in stream mode expected
 rejections are represented by `status`, not process exit. The host must inspect
 every response. Default one-request mode exits nonzero on rejection.
+The `--validate-request`, `--validate-response` and `--validate-exchange` modes
+read one document from stdin and exit zero only when it passes the contract. They
+are available through both `run-json.mjs` and the WASI frontend. The exchange
+document has `request` and `response` fields containing the standard base64 of
+the exact original UTF-8 JSON bytes. This preserves whitespace and integers.
 
 The JSON transport schema is `wsea-sdk-1`; **it is not a new signature container**.
 Binary fields use standard base64. All member names are exact, lowercase and
@@ -158,13 +164,28 @@ For signing, set `operation` to `sign` and add `signing` with `key`,
 `capabilities`. Validity uses unsigned Unix seconds. Size and digest are computed
 from the actual unsigned WASM prefix.
 
-The response is `REJECTED` with an error, `SIGNED_PARTIAL`, or
-`VERIFIED_SNAPSHOT` with authenticated `manifest`, `checked_at` and exclusive
-`valid_until`. Signing also returns the resulting module as base64. The host
+Every response has schema `wsea-sdk-response-1` and `request_sha256`, the base64
+SHA-256 of the exact request bytes. A response is `REJECTED` with an explanatory
+error, or `SIGNED_PARTIAL` or `VERIFIED_SNAPSHOT` with `operation`, authenticated
+`manifest`, `checked_at` and exclusive `valid_until`. Signing also returns the
+resulting module as base64. Error text is diagnostic, not a stable error category.
+The request digest correlates an exchange; it does not authenticate a response.
+The host
 must recheck current protected trust/state, clock rollback and `valid_until`
 immediately before using the result. `VERIFIED_SNAPSHOT` is never a UWVM
 execution receipt. On runtime traps, entropy failure, missing imports or
 malformed responses, reject the operation; there is no successful fallback.
+
+`sdk.validateRequestJSON`, `sdk.validateResponseJSON`, and
+`sdk.validateExchangeJSON` return booleans and consume JSON text without parsing
+it into JavaScript numbers. `requestJSON` and the WASI frontend validate their
+own exchanges before returning them.
+The exchange check binds the response to the original request and checks module
+and manifest consistency. These checks validate the contract, not signature or
+trust authenticity; a well-formed historical snapshot may already be expired.
+Runtime traps and missing responses throw instead of producing a `REJECTED` result.
+The protected-file adapter emits its own `wsea-file-result-1` summary after the
+SDK exchange has been checked.
 
 Versions, epochs, capabilities and timestamps are uint64 integers. Preserve JSON
 text or use a lossless integer-aware JSON library. Ordinary JavaScript
@@ -195,7 +216,9 @@ Download the official archives and verify these SHA-256 digests before use:
 * [Binaryen 133 x86_64 Linux](https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz):
   `2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489`
 
-Run local Linux builds and qualification in a verified 64 GiB, zero-swap cgroup; keep
+Run local Linux builds and qualification in a cgroup with a finite positive effective
+memory limit and zero swap. 64 GiB is an overridable CI default, not a minimum;
+see the [test guide](../doc/wsea-testing.en_US.md) for configuration and actual resource records. Keep
 `TMPDIR`, `GOTMPDIR`, caches, keys and results inside the project's ignored `.tmp`.
 Do not disable protected-path checks to accommodate a group-writable checkout.
 

@@ -49,7 +49,7 @@ def main():
             'key':b64(Path(c['pki']['key']).read_bytes()),'certificates':b64(Path(c['pki']['certificate']).read_bytes()),
             'crls':b64(Path(c['pki']['crl']).read_bytes()),'manifest':dict(m,algorithm=c['algorithm']),
             'append':append,'allow_partial':partial}
-        result=engine.request(req)
+        result=engine.request(req,check_contract=c['algorithm']=='Ed25519')
         if result['status'] not in ('VERIFIED_SNAPSHOT','SIGNED_PARTIAL'):raise RuntimeError(f'{engine.name} signing {c["algorithm"]}: {result}')
         return base64.b64decode(result['module']),result
     def verify_all(d,module,name,allow=True,commit=True):

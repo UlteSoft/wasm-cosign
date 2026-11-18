@@ -19,7 +19,12 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts'))
+from wsea_cross_support import cgroup_snapshot, finish_cgroup
 
 
 def main():
@@ -43,85 +48,101 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     if sys.platform != 'linux':
-        print('BLOCKED: execute only inside the authorized SSH Linux cgroup', file=sys.stderr)
+        print('BLOCKED: interoperability execution requires Linux', file=sys.stderr)
         return 77
     spec = importlib.util.spec_from_file_location('wsea_matrix_contract', args.matrix_driver.resolve(strict=True))
     matrix = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(matrix)
     if args.target not in matrix.TARGETS:
         parser.error('target must be one of ' + ','.join(matrix.TARGETS))
-    before = matrix.cgroup_snapshot(args.require_cgroup)
-    execution = matrix.Execution(args)
-    execution.report.update(interop_driver_sha256=matrix.sha(__file__), go_cli_sha256=matrix.sha(args.go_cli),
-        scope='Host Go CLI independent verification/signing plus actual target C++/optional guest-executing VM',
-        started_unix=int(time.time()))
-    subcommands = json.loads(args.go_subcommands_json)
-    if not isinstance(subcommands, list) or not all(isinstance(x, str) for x in subcommands):
-        parser.error('--go-subcommands-json must be a string argv array')
-    go_wrapper = json.loads(args.go_exec_prefix_json)
-    if not isinstance(go_wrapper, list) or not all(isinstance(x, str) for x in go_wrapper):
-        parser.error('--go-exec-prefix-json must be a string argv array')
-    go_elf = matrix.elf_identity(args.go_cli)
-    if go_wrapper:
-        expected = matrix.TARGETS[args.target]
-        if (go_elf['machine'], go_elf['bits'], go_elf['byte_order']) != expected[:3]:
-            raise RuntimeError('Go CLI ELF does not match the emulated target')
-        qemu = execution.report.get('qemu')
-        if not qemu or qemu['path'] not in [str(Path(x).resolve()) for x in go_wrapper if x.startswith('/') and Path(x).is_file()]:
-            raise RuntimeError('Go CLI must execute through the same recorded target QEMU')
-        if go_elf.get('interpreter'):
-            raise RuntimeError('cross Go CLI qualification requires its actual static executable')
-    execution.report['go_cli_execution'] = {'elf': go_elf, 'exec_prefix': go_wrapper,
-        'scope': 'actual target static Go secure command' if go_wrapper else 'host Go secure command'}
-    go_prefix = [*go_wrapper, str(args.go_cli.resolve(strict=True)), *subcommands]
-    manifest_path = args.fixtures.resolve(strict=True) / 'fixtures.json'
-    fixtures = json.loads(manifest_path.read_text())
-    records = execution.records
-
-    def record(name, command, *, expect='ALLOW', codes=(), cpp=False, vm=False, guest_marker=None):
-        process = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=args.timeout)
-        output = process.stdout + process.stderr
-        expected_exit_codes = [0] if expect == 'ALLOW' else [126, 127] if vm else [2] if cpp else [1]
-        passed = process.returncode in expected_exit_codes and (not cpp or process.stdout.strip() == 'ALLOW') if expect == 'ALLOW' else (
-            process.returncode in expected_exit_codes and (not codes or any(code in output for code in codes)) and
-            (not cpp or process.returncode == 2 and process.stdout.startswith('DENY ')))
-        if guest_marker:
-            passed = passed and (guest_marker in process.stdout if expect == 'ALLOW' else matrix.GUEST_PREFIX not in output)
-        row = {'name': name, 'argv': list(map(str, command)), 'expected': expect, 'codes': list(codes),
-               'returncode': process.returncode, 'stdout': process.stdout, 'stderr': process.stderr, 'passed': passed,
-               'expected_exit_codes': expected_exit_codes,
-               'required_guest_marker': guest_marker}
-        records.append(row)
-        print('PASS' if passed else 'FAIL', name, flush=True)
-        return passed
-
-    def cpp(name, policy, module, allow=True, codes=(), guest_marker=None):
-        record(name, [*execution.prefix, execution.runner, policy, module], expect='ALLOW' if allow else 'DENY', codes=codes, cpp=True)
-        if args.vm:
-            record(name + ' target VM', [*execution.prefix, args.vm, '--secure', 'module', module, policy, '--run', module],
-                   expect='ALLOW' if allow else 'DENY', codes=codes, vm=True, guest_marker=guest_marker)
-
-    def policy_rule(path):
-        rules = [line.removeprefix('module=').split('|') for line in path.read_text().splitlines() if line.startswith('module=')]
-        if len(rules) != 1:
-            raise RuntimeError('expected exactly one scoped policy rule')
-        return rules[0]
-
-    def go_policy(name, fixture, algorithm=None):
-        directory = execution.out / 'go-policies' / name
-        directory.mkdir(mode=0o700, parents=True)
-        policy = directory / 'policy'
-        ca = fixture['pki']
-        command = [*go_prefix, 'policy-init', '--output', policy, '--trust-root', ca['root'],
-            '--state-dir', directory / 'state', '--certificate', ca['certificate'], '--module-id', 'matrix.app',
-            '--minimum-version', '1', '--minimum-epoch', '0', '--capabilities', str(fixture.get('capabilities', 0))]
-        if algorithm is not None:
-            command += ['--algorithms', algorithm]
-        if not record(name + ' Go policy-init', command):
-            raise RuntimeError('policy initialization fixture failed')
-        return policy
-
+    receipt = None
+    receipt_dir = None
+    if args.require_cgroup:
+        scratch = ROOT / '.tmp'
+        scratch.mkdir(mode=0o700, parents=True, exist_ok=True)
+        receipt_dir = Path(tempfile.mkdtemp(prefix='algorithm-interop-cgroup-', dir=scratch))
+        receipt = receipt_dir / 'cgroup.json'
+    execution = None
+    records = []
     try:
+        before = cgroup_snapshot(args.require_cgroup)
+    except BaseException:
+        if receipt_dir is not None:
+            receipt_dir.rmdir()
+        raise
+    try:
+        if receipt is not None:
+            print('cgroup receipt:', receipt, file=sys.stderr, flush=True)
+        execution = matrix.Execution(args)
+        execution.report.update(interop_driver_sha256=matrix.sha(__file__), go_cli_sha256=matrix.sha(args.go_cli),
+            scope='Host Go CLI independent verification/signing plus actual target C++/optional guest-executing VM',
+            started_unix=int(time.time()))
+        subcommands = json.loads(args.go_subcommands_json)
+        if not isinstance(subcommands, list) or not all(isinstance(x, str) for x in subcommands):
+            parser.error('--go-subcommands-json must be a string argv array')
+        go_wrapper = json.loads(args.go_exec_prefix_json)
+        if not isinstance(go_wrapper, list) or not all(isinstance(x, str) for x in go_wrapper):
+            parser.error('--go-exec-prefix-json must be a string argv array')
+        go_elf = matrix.elf_identity(args.go_cli)
+        if go_wrapper:
+            expected = matrix.TARGETS[args.target]
+            if (go_elf['machine'], go_elf['bits'], go_elf['byte_order']) != expected[:3]:
+                raise RuntimeError('Go CLI ELF does not match the emulated target')
+            qemu = execution.report.get('qemu')
+            if not qemu or qemu['path'] not in [str(Path(x).resolve()) for x in go_wrapper if x.startswith('/') and Path(x).is_file()]:
+                raise RuntimeError('Go CLI must execute through the same recorded target QEMU')
+            if go_elf.get('interpreter'):
+                raise RuntimeError('cross Go CLI qualification requires its actual static executable')
+        execution.report['go_cli_execution'] = {'elf': go_elf, 'exec_prefix': go_wrapper,
+            'scope': 'actual target static Go secure command' if go_wrapper else 'host Go secure command'}
+        go_prefix = [*go_wrapper, str(args.go_cli.resolve(strict=True)), *subcommands]
+        manifest_path = args.fixtures.resolve(strict=True) / 'fixtures.json'
+        fixtures = json.loads(manifest_path.read_text())
+        records = execution.records
+
+        def record(name, command, *, expect='ALLOW', codes=(), cpp=False, vm=False, guest_marker=None):
+            process = subprocess.run(list(map(str, command)), capture_output=True, text=True, timeout=args.timeout)
+            output = process.stdout + process.stderr
+            expected_exit_codes = [0] if expect == 'ALLOW' else [126, 127] if vm else [2] if cpp else [1]
+            passed = process.returncode in expected_exit_codes and (not cpp or process.stdout.strip() == 'ALLOW') if expect == 'ALLOW' else (
+                process.returncode in expected_exit_codes and (not codes or any(code in output for code in codes)) and
+                (not cpp or process.returncode == 2 and process.stdout.startswith('DENY ')))
+            if guest_marker:
+                passed = passed and (guest_marker in process.stdout if expect == 'ALLOW' else matrix.GUEST_PREFIX not in output)
+            row = {'name': name, 'argv': list(map(str, command)), 'expected': expect, 'codes': list(codes),
+                   'returncode': process.returncode, 'stdout': process.stdout, 'stderr': process.stderr, 'passed': passed,
+                   'expected_exit_codes': expected_exit_codes,
+                   'required_guest_marker': guest_marker}
+            records.append(row)
+            print('PASS' if passed else 'FAIL', name, flush=True)
+            return passed
+
+        def cpp(name, policy, module, allow=True, codes=(), guest_marker=None):
+            record(name, [*execution.prefix, execution.runner, policy, module], expect='ALLOW' if allow else 'DENY', codes=codes, cpp=True)
+            if args.vm:
+                record(name + ' target VM', [*execution.prefix, args.vm, '--secure', 'module', module, policy, '--run', module],
+                       expect='ALLOW' if allow else 'DENY', codes=codes, vm=True, guest_marker=guest_marker)
+
+        def policy_rule(path):
+            rules = [line.removeprefix('module=').split('|') for line in path.read_text().splitlines() if line.startswith('module=')]
+            if len(rules) != 1:
+                raise RuntimeError('expected exactly one scoped policy rule')
+            return rules[0]
+
+        def go_policy(name, fixture, algorithm=None):
+            directory = execution.out / 'go-policies' / name
+            directory.mkdir(mode=0o700, parents=True)
+            policy = directory / 'policy'
+            ca = fixture['pki']
+            command = [*go_prefix, 'policy-init', '--output', policy, '--trust-root', ca['root'],
+                '--state-dir', directory / 'state', '--certificate', ca['certificate'], '--module-id', 'matrix.app',
+                '--minimum-version', '1', '--minimum-epoch', '0', '--capabilities', str(fixture.get('capabilities', 0))]
+            if algorithm is not None:
+                command += ['--algorithms', algorithm]
+            if not record(name + ' Go policy-init', command):
+                raise RuntimeError('policy initialization fixture failed')
+            return policy
+
         if fixtures['schema'] != matrix.SCHEMA:
             raise RuntimeError('wrong matrix fixture schema')
         if (fixtures.get('source_revision') != 'embedded-v2' or set(fixtures['algorithms']) != set(matrix.ALGORITHMS) or
@@ -238,24 +259,29 @@ def main():
         execution.report['producer_constraints'] = fixtures['producer_constraints']
         execution.report['status'] = 'FAIL' if not all(row['passed'] for row in records) else 'BLOCKED' if fixtures['producer_constraints'] else 'PASS'
     except Exception as error:
+        if execution is None:
+            raise
         execution.report.update(status='FAIL', error=str(error))
     finally:
-        execution.report['finished_unix'] = int(time.time())
-        if before is not None:
-            after = matrix.cgroup_snapshot(True)
-            execution.report.update(cgroup_before=before, cgroup_after=after)
-            if before['cgroup_incarnation'] != after['cgroup_incarnation']:
-                execution.report['status'] = 'FAIL'
-            for old, new in zip(before['cgroup_ancestors'], after['cgroup_ancestors']):
-                if old.get('memory.events') is None:
-                    continue
-                left = dict(line.split() for line in old['memory.events'].splitlines())
-                right = dict(line.split() for line in new['memory.events'].splitlines())
-                if any(left.get(key) != right.get(key) for key in ['oom', 'oom_kill']):
+        try:
+            after = finish_cgroup(before, receipt)
+            if execution is not None and before is not None:
+                execution.report.update(cgroup_before=before, cgroup_after=after, cgroup_receipt=str(receipt))
+        except Exception as error:
+            if execution is not None:
+                execution.report.update(status='FAIL', cgroup_error=str(error), cgroup_receipt=str(receipt))
+            raise
+        finally:
+            if execution is not None:
+                error = sys.exc_info()[1]
+                if error is not None:
                     execution.report['status'] = 'FAIL'
-        report = execution.out / 'interop-report.json'
-        report.write_text(json.dumps(execution.report, indent=2) + '\n')
-        print(json.dumps({'status': execution.report['status'], 'checks': len(records), 'report': str(report)}))
+                    execution.report.setdefault('error', str(error))
+                execution.report.setdefault('status', 'FAIL')
+                execution.report['finished_unix'] = int(time.time())
+                report = execution.out / 'interop-report.json'
+                report.write_text(json.dumps(execution.report, indent=2) + '\n')
+                print(json.dumps({'status': execution.report['status'], 'checks': len(records), 'report': str(report)}))
     return 0 if execution.report['status'] == 'PASS' else 77 if execution.report['status'] == 'BLOCKED' else 1
 
 

@@ -16,10 +16,33 @@
 
 ## 本机资源准入
 
-本机 Linux 测试必须在已授权 **64 GiB、零 swap cgroup** 内运行。
-进程确实属于被准入的叶节点，且祖先计算出的有效上限同样为 68719476736 字节。
-测试前后记录叶节点／启动身份和 OOM 计数，cgroup 改变或 OOM 计数增长均使验证无效。
-不得启动约束更弱的子进程，也不能为了通过测试调整上限。
+本机 Linux 测试必须在 cgroup v2 内运行，实际有效内存上限须为有限正数，有效 swap 上限为零，
+叶节点不得已有交换出的内存。祖先可以设置更紧的上限。以下 `8G` 只是配置示例，不表示该额度已通过验证；
+应根据可用资源选择合适额度，并通过实际测试确认。
+
+```sh
+MEMORY_MAX=8G
+MEMORY_HIGH=6G
+umask 077
+mkdir -p .tmp
+sudo systemd-run --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" \
+  --working-directory="$PWD" --property="MemoryMax=$MEMORY_MAX" \
+  --property="MemoryHigh=$MEMORY_HIGH" --property=MemorySwapMax=0 \
+  --property=TasksMax=512 --property=CPUQuota=200% \
+  /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+  python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 1800 -- \
+  bash scripts/test_wsea_native.sh
+```
+
+`wsea_cross_support.py` 在已有 cgroup 内运行指定命令，不创建或修改 cgroup；它记录实际叶节点及祖先的
+配置、峰值和前后分层及本地 OOM 计数。cgroup 身份或限制改变、叶节点分层 OOM 计数或祖先本地 OOM
+计数增长、命令失败或超时均使运行失败。
+子进程须保持在同一资源边界内。已处于合适 cgroup 时，可直接用该 helper 包住其他有时限的命令。
+
+CI 的 GitHub 仓库 Actions 变量 `WSEA_MEMORY_MAX` 和 `WSEA_MEMORY_HIGH` 分别控制 systemd 硬上限和
+节流阈值，未设置时默认为 `64G` 和 `6G`；64 GiB 是可覆盖配置，不是最低要求或实际用量。
+可在仓库 Settings → Secrets and variables → Actions → Variables 中设置，按需同时调整两者。
+CI 在日志中输出实际资源记录，零 swap 与 OOM 检查始终保留。
 
 `TMPDIR`、`GOTMPDIR`、Go／Python 缓存、生成私钥、样本、报告与日志均放入项目 `.tmp`，
 目录权限 0700、umask 077。限制编译并发、进程数和超时，CI 驱动还禁用 core dump。
@@ -28,10 +51,20 @@ macOS 托管原生测试按真实环境标识，不宣称具备 Linux cgroup 覆
 
 ## 原生测试与文档检查
 
+先运行资源边界测试。Linux 集成测试要求所选父 cgroup 已委派 memory 控制器，且执行用户可写；
+测试只创建并清理临时子 cgroup。以下示例使用 sudo 和 cgroup 根节点。
+
+```sh
+mkdir -p .tmp/resource-tests
+TMPDIR="$PWD/.tmp/resource-tests" PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_test.py
+sudo env PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_integration_test.py --parent /sys/fs/cgroup
+```
+
 在已通过准入的环境中运行：
 
 ```sh
-bash scripts/test_wsea_native.sh
+python3 scripts/wsea_cross_support.py --receipt .tmp/native-resource.json --timeout 1800 -- \
+  bash scripts/test_wsea_native.sh
 python3 scripts/check_wsea_docs.py
 ```
 

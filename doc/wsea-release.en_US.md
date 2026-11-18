@@ -37,9 +37,11 @@ an explicit source change and renewed qualification.
   upstream container/conformance jobs do not become WSEA release evidence.
 
 Generated files stay in `.tmp`. Linux build/test jobs use disposable systemd
-units with a 64 GiB hard memory limit, zero swap, bounded CPU/processes and job
-timeouts; memory pressure throttling adds a lower soft limit. The portable
-qualification checks the actual leaf and OOM counters. macOS uses separate native
+units with a hard memory limit and throttling threshold configured by repository
+variables `WSEA_MEMORY_MAX` and `WSEA_MEMORY_HIGH`, defaulting to `64G` and `6G`.
+64 GiB is an overridable default, not a minimum. Swap is zero, CPU/processes and
+job time are bounded, and actual leaf and ancestor configuration, peak usage and
+OOM counters are checked and recorded in the logs. macOS uses separate native
 hosted runners. There is no fallback that changes crypto or skips failed tests.
 
 ## Automatic release targets
@@ -61,7 +63,7 @@ statically link the bundled OpenSSL and use their system C/C++ libraries.
 
 `wsea-cross-assets.yml` runs nine Linux configurations through actual QEMU 10.2+
 and builds/tests FreeBSD inside a disposable QEMU guest. The FreeBSD VM has 4 GiB
-RAM and two CPUs and inherits the host's 64 GiB zero-swap cgroup. Its official
+RAM and two CPUs and inherits the host's configurable zero-swap cgroup. Its official
 15.1 image and Go 1.27.3 archive are pinned by SHA-256. Guest dependencies are
 installed only inside its disposable overlay. The guest build uses an unprivileged
 account and SSH binds to host loopback. No persistent VM or persistent self-hosted

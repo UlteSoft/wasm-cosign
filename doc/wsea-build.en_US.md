@@ -23,7 +23,7 @@ Use the project's ignored `.tmp` for **all** generated files: build trees,
 toolchains downloaded for this task, caches, keys, fixtures, logs and reports.
 Keep the checkout and its ancestors protected against group/other writes.
 The following environment is useful inside an already admitted local Linux
-64 GiB zero-swap cgroup; setting variables alone does not establish that cgroup.
+zero-swap cgroup; setting variables alone does not establish that cgroup.
 
 ```sh
 umask 077
@@ -35,12 +35,13 @@ export PYTHONDONTWRITEBYTECODE=1
 export WSEA_OPENSSL_ROOT="$PWD/.tmp/work/openssl"
 ```
 
-Validate actual process membership, effective `memory.max=68719476736`,
-`memory.swap.max=0` and OOM counters. Run child commands inside the same cgroup,
-with bounded jobs and timeouts. Do not increase a host limit or disable checks
-when admission fails. CI provisions a disposable Linux systemd unit with the
-same hard cap; macOS native jobs use isolated GitHub-hosted runners and are not
-reported as Linux cgroup tests. See the [test guide](wsea-testing.en_US.md).
+The effective memory limit must be finite and positive and the effective swap
+limit must be zero; an ancestor may impose a tighter limit. Record the actual
+cgroup configuration, peak and OOM counters before and after testing. Keep child
+commands inside the same resource boundary and bound jobs and timeouts. CI defaults
+to 64 GiB, configurable through repository variables; this is not a minimum.
+macOS native jobs use isolated GitHub-hosted runners and are not reported as Linux
+cgroup tests. See the [test guide](wsea-testing.en_US.md) for configuration and receipts.
 
 ## Shared verifier and pinned OpenSSL
 

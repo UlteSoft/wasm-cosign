@@ -26,9 +26,11 @@ WSEA 工作流使用的外部 action 全部固定完整提交 SHA。工具链归
   执行完整矩阵、签名与宿主安全套件；源码检查对照两个仓库。
 - 产品 linter 和空白检查独立保留。历史上游容器／conformance 任务不能成为 WSEA 发行证据。
 
-生成文件留在 `.tmp`。Linux 构建／测试任务使用一次性 systemd 单元，硬内存上限 64 GiB、
-swap 为零、限制 CPU／进程数并设置任务超时；内存压力时还有更低的软限制用于节流。
-可移植验证检查真实叶节点及 OOM 计数。macOS 使用独立原生托管 runner。
+生成文件留在 `.tmp`。Linux 构建／测试任务使用一次性 systemd 单元，内存硬上限和节流阈值
+分别由仓库变量 `WSEA_MEMORY_MAX`、`WSEA_MEMORY_HIGH` 设置，默认 `64G`、`6G`；
+64 GiB 是可覆盖默认值，不是最低要求。swap 为零，CPU／进程数和任务时间均受限。
+任务检查并在日志记录实际叶节点及祖先资源配置、峰值和 OOM 计数。
+macOS 使用独立原生托管 runner。
 不存在更换密码学或跳过失败测试的回退。
 
 ## 自动发行目标
@@ -48,7 +50,7 @@ i686 要求 SSE2；ARMv7 使用 hard-float ABI；PowerPC64 LE 要求 POWER8 或�
 MIPS64 使用 n64 硬件浮点 ABI。macOS 与 FreeBSD 静态链接内置 OpenSSL，同时使用系统 C/C++ 库。
 
 `wsea-cross-assets.yml` 使用实际 QEMU 10.2+ 执行九种 Linux 配置，并在一次性 QEMU 客体中
-构建、测试 FreeBSD。FreeBSD 虚拟机使用 4 GiB 内存、两个 CPU，继承宿主的 64 GiB、零 swap
+构建、测试 FreeBSD。FreeBSD 虚拟机使用 4 GiB 内存、两个 CPU，继承宿主的可配置零 swap
 cgroup。官方 15.1 镜像与 Go 1.27.3 归档均固定 SHA-256，客体依赖仅安装到一次性磁盘叠加层。
 客体构建使用普通用户，SSH 仅绑定宿主回环地址；不需要持久虚拟机或持久自托管 runner。
 

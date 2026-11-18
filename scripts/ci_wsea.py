@@ -3,7 +3,6 @@
 # Licensed under the Apache License, Version 2.0.
 """Qualify source-built WSEA WASM in UWVM, Wasmtime and Node before packaging is published."""
 import argparse
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,6 +10,8 @@ import resource
 import subprocess
 import sys
 import tarfile
+
+from wsea_cross_support import cgroup_snapshot, finish_cgroup
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = ['./cmd/cosign', './cmd/wasmcosign', './internal/wasmcli',
@@ -38,14 +39,17 @@ def main():
                       GOCACHE=str(work / 'go-cache'), GOMODCACHE=str(work / 'go-modules'),
                       GOMAXPROCS='2', WSEA_OPENSSL_JOBS='3', PYTHONDONTWRITEBYTECODE='1',
                       GOTOOLCHAIN='local')
-    probe_path = u / 'test/0073.ros-tests/support/source/ros_cgroup/probe.py'
-    spec = importlib.util.spec_from_file_location('wsea_cgroup_probe', probe_path)
-    probe = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(probe)
-    before = probe.probe()
-    if before['status'] != 'PASS':
-        raise RuntimeError('64 GiB zero-swap cgroup admission failed: ' + json.dumps(before))
+    before = cgroup_snapshot()
+    try:
+        revision = qualify(a, u, work, tools)
+    finally:
+        after = finish_cgroup(before, work / 'cgroup.json')
+    (work / 'qualification.json').write_text(json.dumps({'status': 'PASS', 'uwvm_revision': revision,
+        'version': a.version, 'cgroup_before': before, 'cgroup_after': after}, indent=2) + '\n')
+    print('PASS: paired source, native tests, strict MVP, 277 matrix cases, 76 signing checks, 13 host-security checks', flush=True)
 
+
+def qualify(a, u, work, tools):
     def run(name, argv, timeout=1800):
         print('RUN', name, flush=True)
         log = work / (name + '.log')
@@ -70,6 +74,7 @@ def main():
         raise RuntimeError('Wasmtime must be 42.0.1')
     if subprocess.check_output(['node', '--version'], text=True).strip() != 'v22.22.3':
         raise RuntimeError('Node must be 22.22.3')
+    run('sdk-loader', ['node', 'test/wsea/loader_contract_test.mjs'])
     expected = (ROOT / 'scripts/wsea_uwvm_revision.txt').read_text().strip()
     revision = subprocess.check_output(['git', '-C', str(u), 'rev-parse', 'HEAD'], text=True).strip()
     if revision != expected or subprocess.check_output(['git', '-C', str(u), 'status', '--porcelain']):
@@ -135,8 +140,10 @@ def main():
                         raise RuntimeError('common release file differs between targets')
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(data)
+    # The outer qualification guard covers fixture generation as well; the
+    # upstream flag imposes a different, fixed cgroup limit.
     run('fixtures', [sys.executable, source / 'algorithm_matrix.py', '--prepare',
-                     '--ed-variant-signer', work / 'variant-signer', '--output', work / 'fixtures', '--require-cgroup'])
+                     '--ed-variant-signer', work / 'variant-signer', '--output', work / 'fixtures'])
     base = ['--assets', assets, '--fixtures', work / 'fixtures']
     run('matrix', [sys.executable, 'test/wsea/wasm_interop.py', *base, '--uwvm-root', u,
                    '--native-verifier', work / 'verifier', '--uwvm', uwvm, '--output', work / 'matrix'])
@@ -146,17 +153,7 @@ def main():
     if a.version:
         run('package-webgui', [sys.executable, 'scripts/package_wsea_webgui.py',
                               '--version', a.version, '--output', work / 'release'])
-    after = probe.probe()
-    if after['status'] != 'PASS' or after['cgroup_incarnation'] != before['cgroup_incarnation']:
-        raise RuntimeError('cgroup changed during qualification')
-    for old, new in zip(before['cgroup_ancestors'], after['cgroup_ancestors'], strict=True):
-        for row in (old, new):
-            row['events'] = dict(line.split() for line in (row.get('memory.events') or '').splitlines())
-        if any(old['events'].get(k) != new['events'].get(k) for k in ('oom', 'oom_kill', 'oom_group_kill')):
-            raise RuntimeError('OOM counters changed')
-    (work / 'qualification.json').write_text(json.dumps({'status': 'PASS', 'uwvm_revision': revision,
-        'version': a.version, 'cgroup_before': before, 'cgroup_after': after}, indent=2) + '\n')
-    print('PASS: paired source, native tests, strict MVP, 277 matrix cases, 76 signing checks, 13 host-security checks', flush=True)
+    return revision
 
 
 if __name__ == '__main__':

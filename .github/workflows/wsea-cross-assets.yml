@@ -21,6 +21,9 @@ jobs:
     name: QEMU ${{ matrix.target }}
     runs-on: ubuntu-26.04
     timeout-minutes: 45
+    env:
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     strategy:
       fail-fast: false
       matrix:
@@ -70,12 +73,18 @@ jobs:
         run: |
           sudo systemd-run --unit="wsea-cross-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
-            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property="MemoryMax=$WSEA_MEMORY_MAX" --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
+            --property=MemorySwapMax=0 \
             --property=TasksMax=512 --property=CPUQuota=200% \
             /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 2400 -- \
             python3 scripts/ci_wsea_cross.py --version "$RELEASE_VERSION" --target "$RELEASE_TARGET" \
               --source-root .tmp/release-source --uwvm-root .tmp/uwvm \
               --work .tmp/release-source/.tmp/cross
+      - name: Report cgroup resource usage
+        if: ${{ always() }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wsea-native-${{ matrix.target }}
@@ -87,6 +96,9 @@ jobs:
     name: QEMU x86_64-freebsd15
     runs-on: ubuntu-26.04
     timeout-minutes: 60
+    env:
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -128,11 +140,17 @@ jobs:
         run: |
           sudo systemd-run --unit="wsea-freebsd-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
-            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property="MemoryMax=$WSEA_MEMORY_MAX" --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
+            --property=MemorySwapMax=0 \
             --property=TasksMax=512 --property=CPUQuota=200% \
             /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 3300 -- \
             python3 scripts/ci_wsea_freebsd.py --require-kvm --version "$RELEASE_VERSION" \
               --source-root .tmp/release-source --uwvm-root .tmp/uwvm --work .tmp/freebsd
+      - name: Report cgroup resource usage
+        if: ${{ always() }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wsea-native-x86_64-freebsd15

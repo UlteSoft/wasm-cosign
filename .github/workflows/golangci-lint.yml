@@ -15,6 +15,9 @@ jobs:
     name: Product lint
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,8 +32,16 @@ jobs:
           sudo apt-get install -y g++ pkg-config perl make python3
       - name: Lint the complete product under the resource cap
         run: |
+          umask 077
+          mkdir -p .tmp
           sudo systemd-run --unit="wsea-lint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" --working-directory="$PWD" \
-            --property=MemoryMax=64G --property=MemoryHigh=6G --property=MemorySwapMax=0 \
+            --property="MemoryMax=$WSEA_MEMORY_MAX" --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
+            --property=MemorySwapMax=0 \
             --property=TasksMax=512 --property=CPUQuota=200% /usr/bin/env PATH="$PATH" HOME="$HOME" \
+            python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 900 -- \
             bash scripts/lint_wsea.sh
+      - name: Report cgroup resource usage
+        if: ${{ always() }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi

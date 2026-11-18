@@ -31,8 +31,8 @@ type Manifest struct {
 	ModuleID            string      `json:"module_id"`
 	Version             uint64      `json:"version"`
 	Epoch               uint64      `json:"security_epoch"`
-	Size                uint64      `json:"size"`
-	Digest              []byte      `json:"sha256"`
+	Size                uint64      `json:"size,omitempty"`
+	Digest              []byte      `json:"sha256,omitempty"`
 	NotBefore           uint64      `json:"not_before"`
 	NotAfter            uint64      `json:"not_after"`
 	ABI                 string      `json:"abi"`
@@ -59,6 +59,18 @@ func validID(id string) bool {
 func (m Manifest) validate() error {
 	if !m.Embedded || !validID(m.ModuleID) || m.ABI != "uwvm2" || len(m.Digest) != 32 || m.Size < 8 || m.Version == 0 || m.NotAfter <= m.NotBefore || m.NotAfter > 1<<63-1 || m.Capabilities & ^KnownCapabilities != 0 {
 		return errors.New("SIG_002: invalid WSEA manifest")
+	}
+	return nil
+}
+
+// Validate checks the authenticated manifest shape and its exact algorithm
+// profile. It does not authenticate the manifest or any signature.
+func (m Manifest) Validate() error {
+	if err := m.validate(); err != nil {
+		return err
+	}
+	if _, ok := profile(m.Algorithm); !ok {
+		return errors.New("SIG_005: unsupported signing algorithm")
 	}
 	return nil
 }
