@@ -30,7 +30,8 @@ FreeBSD 15.1+ x86_64、macOS 15+ AArch64 / x86_64、wasm32-wasip1、wasm32-js。
 
 发布流程在真实 UWVM、Wasmtime、Node 中验证 277 个对照用例、76 项互通签名检查和
 13 项宿主安全检查，并执行原生产品测试、双方源码一致性与严格 MVP 检查。
-Linux 与 FreeBSD/QEMU 资格验证使用 64 GiB、零 swap cgroup；macOS 在各架构托管 runner 原生测试。
+Linux 与 FreeBSD/QEMU 资格验证使用可配置内存上限的零 swap cgroup，并记录实际资源；
+CI 默认 64 GiB 并非最低要求。macOS 在各架构托管 runner 原生测试。
 所有新增原生目标都执行完整产品测试；Linux 交叉目标使用实际 QEMU，FreeBSD 在真实客体系统内构建和测试。
 测试密钥、样本、日志、结果和构建中间文件不进入附件。
 
@@ -61,7 +62,8 @@ SHA256SUMS covers all 16 archives.
 Publication requires 277 corpus cases and 76 signing/interoperability checks on
 real UWVM, Wasmtime and Node, 13 host-security checks, native product tests,
 paired-source checks and strict MVP validation. Linux and FreeBSD/QEMU qualification
-use a 64 GiB zero-swap cgroup; macOS runs natively on the matching hosted architecture.
+use a configurable zero-swap cgroup and record actual resources; the 64 GiB CI
+default is not a minimum. macOS runs natively on the matching hosted architecture.
 Every additional native target runs the full product tests, using actual QEMU for
 Linux cross builds and a real FreeBSD guest for FreeBSD builds and tests.
 Generated keys, fixtures, logs, reports and build intermediates are excluded.

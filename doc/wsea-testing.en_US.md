@@ -19,11 +19,40 @@ The real guest-executing UWVM CLI is required, not a loader-only mock.
 
 ## Local resource admission
 
-Run local Linux tests in the authorized **64 GiB zero-swap cgroup**. The process
-must actually belong to the admitted leaf, whose effective ancestor limit also
-matches 68719476736 bytes. Record the leaf/boot identity and OOM counters before
-and after testing. A changed cgroup or increased OOM counter invalidates the run.
-Do not create a less constrained subprocess or adjust the limit to make a test pass.
+Run local Linux tests inside cgroup v2 with a finite positive effective memory
+limit, an effective swap limit of zero and no memory already swapped from the leaf.
+An ancestor may impose a tighter limit. The `8G` below is only a configuration
+example, not a claim that this budget has passed qualification; choose a suitable
+budget for the available resources and verify it with the actual tests.
+
+```sh
+MEMORY_MAX=8G
+MEMORY_HIGH=6G
+umask 077
+mkdir -p .tmp
+sudo systemd-run --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" \
+  --working-directory="$PWD" --property="MemoryMax=$MEMORY_MAX" \
+  --property="MemoryHigh=$MEMORY_HIGH" --property=MemorySwapMax=0 \
+  --property=TasksMax=512 --property=CPUQuota=200% \
+  /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+  python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 1800 -- \
+  bash scripts/test_wsea_native.sh
+```
+
+`wsea_cross_support.py` runs the command inside an existing cgroup; it does not
+create or modify one. It records actual leaf and ancestor configuration, peak
+usage and hierarchical and local OOM counters before and after the command. A
+changed cgroup identity or limit, an increase in the leaf's hierarchical or an
+ancestor's local OOM counters, command failure or timeout fails the run. Keep child
+processes inside the same resource boundary. Inside a suitable existing cgroup,
+the helper can wrap other commands with a finite timeout.
+
+The GitHub repository Actions variables `WSEA_MEMORY_MAX` and `WSEA_MEMORY_HIGH`
+set the systemd hard limit and throttling threshold, defaulting to `64G` and `6G`.
+64 GiB is an overridable configuration, not a minimum or measured usage. Set them
+under repository Settings → Secrets and variables → Actions → Variables, adjusting
+both as needed. CI prints actual resource receipts in its logs and retains the
+zero-swap and OOM checks.
 
 Keep `TMPDIR`, `GOTMPDIR`, Go/Python caches, generated private keys, fixtures,
 reports and logs in project `.tmp`, mode 0700 with umask 077. Bound compiler jobs,
@@ -33,10 +62,22 @@ coverage. Release archives and tracked source exclude generated test material.
 
 ## Native tests and documentation checks
 
+Run the resource boundary tests first. The Linux integration test requires a
+selected parent cgroup with the memory controller already delegated and writable
+by the executing user; it creates and removes only temporary child cgroups. This
+example uses sudo and the cgroup root.
+
+```sh
+mkdir -p .tmp/resource-tests
+TMPDIR="$PWD/.tmp/resource-tests" PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_test.py
+sudo env PYTHONDONTWRITEBYTECODE=1 python3 test/wsea/cgroup_integration_test.py --parent /sys/fs/cgroup
+```
+
 Inside the admitted environment:
 
 ```sh
-bash scripts/test_wsea_native.sh
+python3 scripts/wsea_cross_support.py --receipt .tmp/native-resource.json --timeout 1800 -- \
+  bash scripts/test_wsea_native.sh
 python3 scripts/check_wsea_docs.py
 ```
 
