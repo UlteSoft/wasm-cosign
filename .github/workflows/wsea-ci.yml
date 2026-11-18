@@ -23,6 +23,9 @@ jobs:
     name: WASIp1 / Node / real UWVM
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      WSEA_MEMORY_MAX: ${{ vars.WSEA_MEMORY_MAX || '64G' }}
+      WSEA_MEMORY_HIGH: ${{ vars.WSEA_MEMORY_HIGH || '6G' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,7 +55,6 @@ jobs:
             third-parties/openssl
             tools/dependencies
             test/0073.ros-tests/support/source/security_wsea
-            test/0073.ros-tests/support/source/ros_cgroup
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27.3'
@@ -64,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y g++-14 pkg-config perl make python3 xz-utils
-      - name: Build and qualify inside a 64 GiB zero-swap cgroup
+      - name: Build and qualify inside a bounded zero-swap cgroup
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
@@ -72,11 +74,17 @@ jobs:
           if [ -n "$RELEASE_VERSION" ]; then args+=(--version "$RELEASE_VERSION"); fi
           sudo systemd-run --unit="wsea-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --wait --pipe --collect --uid="$(id -u)" --gid="$(id -g)" \
-            --working-directory="$PWD" --property=MemoryMax=64G --property=MemoryHigh=6G \
+            --working-directory="$PWD" --property="MemoryMax=$WSEA_MEMORY_MAX" \
+            --property="MemoryHigh=$WSEA_MEMORY_HIGH" \
             --property=MemorySwapMax=0 --property=TasksMax=512 --property=CPUQuota=200% \
             /usr/bin/env PATH="$PATH" HOME="$HOME" PYTHONDONTWRITEBYTECODE=1 \
+            python3 scripts/wsea_cross_support.py --receipt .tmp/resource-receipt.json --timeout 3300 -- \
             python3 scripts/ci_wsea.py --uwvm-root .tmp/uwvm --tools .tmp/tools \
               --work .tmp/qualification --fetch-tools "${args[@]}"
+      - name: Report cgroup resource usage
+        if: ${{ always() }}
+        run: |
+          if [ -f .tmp/resource-receipt.json ]; then cat .tmp/resource-receipt.json; fi
       - name: Upload only qualified release archives
         if: inputs.version != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
