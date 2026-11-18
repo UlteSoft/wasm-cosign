@@ -16,7 +16,8 @@ import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import server as gui
-from integration import cgroup
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+from wsea_cross_support import cgroup_snapshot, finish_cgroup
 
 
 def main():
@@ -25,7 +26,6 @@ def main():
     p.add_argument('--fixtures', required=True, type=Path, help='integration.py output directory')
     p.add_argument('--require-cgroup', action='store_true')
     a = p.parse_args()
-    before = cgroup(a.require_cgroup)
     os.umask(0o077)
     scratch = Path(__file__).resolve().parents[2] / '.tmp' / 'webgui'
     fixtures = a.fixtures.resolve()
@@ -33,6 +33,14 @@ def main():
         p.error('Fixtures must be inside project .tmp')
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
     out = Path(tempfile.mkdtemp(prefix='frontend-', dir=scratch))
+    before = cgroup_snapshot(a.require_cgroup)
+    try:
+        exercise_frontend(a, fixtures, out)
+    finally:
+        finish_cgroup(before, out / 'cgroup.json')
+
+
+def exercise_frontend(a, fixtures, out):
     os.environ['TMPDIR'] = str(out)
     fixture = json.loads((fixtures / 'browser-fixture.json').read_text())
     binary = a.binary.resolve(strict=True)
@@ -54,21 +62,21 @@ def main():
     app = gui.Application(binary, 30, picker=picker)
     server = gui.LocalServer(('127.0.0.1', 0), app)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
     session = out / 'session.json'
-    session.write_text(json.dumps({'url': server.origin + '/#token=' + app.token,
-                                   'times': fixture['times']}))
+    started = False
     try:
+        thread.start()
+        started = True
+        session.write_text(json.dumps({'url': server.origin + '/#token=' + app.token,
+                                       'times': fixture['times']}))
         subprocess.run(['node', str(Path(__file__).with_name('test_frontend.js')), str(session)],
                        check=True, timeout=60)
     finally:
-        server.shutdown()
+        if started:
+            server.shutdown()
+            thread.join()
         server.server_close()
-        thread.join()
-        session.unlink()  # The test token is no longer useful; keep it out of reports.
-        after = cgroup(a.require_cgroup)
-        if before and after and before['memory.events'] != after['memory.events']:
-            raise RuntimeError('Cgroup memory events changed during the frontend test')
+        session.unlink(missing_ok=True)  # Keep the test token out of reports.
 
 
 if __name__ == '__main__':

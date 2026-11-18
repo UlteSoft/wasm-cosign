@@ -24,22 +24,8 @@ import time
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import server as gui
-
-
-def cgroup(required):
-    if sys.platform!='linux':
-        if required:raise RuntimeError('A Linux cgroup is required.')
-        return None
-    relative=Path('/proc/self/cgroup').read_text().strip().split('0::')[-1]
-    path=Path('/sys/fs/cgroup')/relative.lstrip('/')
-    if not (path/'memory.max').exists():
-        if required:raise RuntimeError('No memory cgroup available.')
-        return None
-    result={k:(path/k).read_text().strip() for k in ['memory.max','memory.swap.max','memory.events']}
-    result['path']=str(path)
-    if required and (result['memory.max']=='max' or int(result['memory.max'])>64*1024**3 or result['memory.swap.max']!='0'):
-        raise RuntimeError('Tests require a cgroup with memory.max <= 64 GiB and zero swap.')
-    return result
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts'))
+from wsea_cross_support import cgroup_snapshot,finish_cgroup
 
 
 def main():
@@ -58,7 +44,6 @@ def main():
         out.mkdir(mode=0o700,parents=True,exist_ok=False)
     else:out=Path(tempfile.mkdtemp(prefix='integration-',dir=scratch))
     os.environ['TMPDIR']=str(out)
-    before=cgroup(a.require_cgroup)
     records=[]
     def record(name,passed,**details):
         records.append({'name':name,'passed':bool(passed),**details})
@@ -105,8 +90,9 @@ authorityKeyIdentifier=keyid,issuer
         openssl('ca','-batch','-config',d/'ca.cnf','-gencrl','-out',d/'fresh.crl.pem')
         return {'key':str(d/'signer.key'),'certificate':str(d/'signer.pem'),'crl':str(d/'fresh.crl.pem'),'root':str(d/'root.pem')}
 
-    app=None;server=None;tls=None
+    app=None;server=None;tls=None;worker=None;tlsworker=None
     old_tls_env={k:os.environ.get(k) for k in ['SSL_CERT_FILE','SSL_CERT_DIR']}
+    before=cgroup_snapshot(a.require_cgroup)
     try:
         app=gui.Application(a.binary,30)
         server=gui.LocalServer(('127.0.0.1',0),app)
@@ -244,16 +230,32 @@ authorityKeyIdentifier=keyid,issuer
         # Stable inputs for manual/browser QA; paths only, no key material in JSON.
         (out/'browser-fixture.json').write_text(json.dumps({'sign':sign_fields(d,ca,'ES256',output=str(out/'browser-signed.wasm')),'mixed':fields,'pki':pki,'times':times},indent=2))
     finally:
-        if tls:tls.shutdown();tls.server_close()
-        if server:server.shutdown();server.server_close()
-        for key,old in old_tls_env.items():
-            if old is None:os.environ.pop(key,None)
-            else:os.environ[key]=old
-        after=cgroup(a.require_cgroup)
-        if before and after:
-            def oom(snapshot):return {k:int(v) for k,v in (line.split() for line in snapshot['memory.events'].splitlines()) if k.startswith('oom')}
-            record('64 GiB cgroup has no new OOM events',before['path']==after['path'] and oom(before)==oom(after),before=before,after=after)
-        (out/'report.json').write_text(json.dumps({'binary':str(a.binary.resolve()),'binary_sha256':hashlib.sha256(a.binary.read_bytes()).hexdigest(),'checks':records,'passed':sum(r['passed'] for r in records),'total':len(records)},indent=2))
+        try:
+            try:
+                if tls:
+                    try:
+                        if tlsworker and tlsworker.is_alive():tls.shutdown()
+                    finally:tls.server_close()
+            finally:
+                try:
+                    if server:
+                        try:
+                            if worker and worker.is_alive():server.shutdown()
+                        finally:server.server_close()
+                finally:
+                    for key,old in old_tls_env.items():
+                        if old is None:os.environ.pop(key,None)
+                        else:os.environ[key]=old
+        finally:
+            try:
+                after=finish_cgroup(before,out/'cgroup.json')
+            except Exception as error:
+                records.append({'name':'cgroup resources unchanged','passed':False,'error':str(error)})
+                raise
+            else:
+                if before is not None:record('cgroup resources unchanged',True,before=before,after=after)
+            finally:
+                (out/'report.json').write_text(json.dumps({'binary':str(a.binary.resolve()),'binary_sha256':hashlib.sha256(a.binary.read_bytes()).hexdigest(),'checks':records,'passed':sum(r['passed'] for r in records),'total':len(records)},indent=2))
     print('PASS',len(records),'checks;',out,flush=True)
 
 
