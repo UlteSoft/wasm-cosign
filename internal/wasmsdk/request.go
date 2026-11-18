@@ -6,6 +6,7 @@ package wasmsdk
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"io"
@@ -45,30 +46,45 @@ type Request struct {
 }
 
 type Response struct {
-	Status     string               `json:"status"`
-	Error      string               `json:"error,omitempty"`
-	Manifest   *wasmsecure.Manifest `json:"manifest,omitempty"`
-	Module     []byte               `json:"module,omitempty"`
-	CheckedAt  uint64               `json:"checked_at,omitempty"`
-	ValidUntil uint64               `json:"valid_until,omitempty"`
+	Schema        string               `json:"schema"`
+	Status        string               `json:"status"`
+	RequestSHA256 []byte               `json:"request_sha256"`
+	Operation     string               `json:"operation,omitempty"`
+	Error         string               `json:"error,omitempty"`
+	Manifest      *wasmsecure.Manifest `json:"manifest,omitempty"`
+	Module        []byte               `json:"module,omitempty"`
+	CheckedAt     uint64               `json:"checked_at,omitempty"`
+	ValidUntil    uint64               `json:"valid_until,omitempty"`
 }
 
 // strictJSON rejects duplicate members at every nesting level, unknown fields,
 // trailing values and excessively nested objects before binding security input.
-func strictJSON(data []byte, request *Request) error {
+func strictJSON(data []byte, target any) error {
+	_, err := strictJSONMembers(data, target)
+	return err
+}
+
+func strictJSONMembers(data []byte, target any) (map[string]bool, error) {
 	if !utf8.Valid(data) || len(bytes.TrimSpace(data)) == 0 || bytes.TrimSpace(data)[0] != '{' {
-		return errors.New("SDK_001: UTF-8 request object required")
+		return nil, errors.New("SDK_001: UTF-8 JSON object required")
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
-	var value func(int) error
-	value = func(depth int) error {
+	members := make(map[string]bool)
+	var value func(int, string) error
+	value = func(depth int, path string) error {
 		if depth > 16 {
 			return errors.New("SDK_001: excessive JSON depth")
 		}
 		t, err := d.Token()
 		if err != nil {
 			return err
+		}
+		if t == nil {
+			return errors.New("SDK_001: null is not a contract value")
+		}
+		if text, ok := t.(string); ok && isBytesMember(path) && !canonicalBase64(text) {
+			return errors.New("SDK_001: noncanonical base64")
 		}
 		delim, ok := t.(json.Delim)
 		if !ok {
@@ -94,13 +110,18 @@ func strictJSON(data []byte, request *Request) error {
 					}
 				}
 				seen[name] = true
-				if e = value(depth + 1); e != nil {
+				child := name
+				if path != "" {
+					child = path + "." + name
+				}
+				members[child] = true
+				if e = value(depth+1, child); e != nil {
 					return e
 				}
 			}
 		case '[':
 			for d.More() {
-				if e := value(depth + 1); e != nil {
+				if e := value(depth+1, path); e != nil {
 					return e
 				}
 			}
@@ -110,40 +131,34 @@ func strictJSON(data []byte, request *Request) error {
 		_, err = d.Token()
 		return err
 	}
-	if err := value(0); err != nil {
-		return err
+	if err := value(0, ""); err != nil {
+		return nil, err
 	}
 	if _, err := d.Token(); err != io.EOF {
-		return errors.New("SDK_001: trailing JSON")
+		return nil, errors.New("SDK_001: trailing JSON")
 	}
 	d = json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
-	return d.Decode(request)
+	if err := d.Decode(target); err != nil {
+		return nil, err
+	}
+	return members, nil
 }
 
 func Process(data []byte) Response {
-	fail := func(e error) Response { return Response{Status: "REJECTED", Error: e.Error()} }
-	if len(data) > MaxRequestBytes {
-		return fail(errors.New("SDK_001: request too large"))
+	requestDigest := sha256.Sum256(data)
+	fail := func(e error) Response {
+		message := e.Error()
+		if len(message) > MaxErrorBytes {
+			message = "SDK_001: request rejected"
+		}
+		return Response{Schema: ResponseSchema, Status: "REJECTED", RequestSHA256: requestDigest[:], Error: message}
 	}
-	var r Request
-	if e := strictJSON(data, &r); e != nil {
+	r, e := decodeRequest(data)
+	if e != nil {
 		return fail(e)
 	}
 	defer clear(r.SigningKey())
-	if r.Schema != "wsea-sdk-1" || (r.Operation != "sign" && r.Operation != "verify") || len(r.Module) > MaxModuleBytes {
-		return fail(errors.New("SDK_001: unsupported request or module size"))
-	}
-	if len(r.Trust.Roots) == 0 || len(r.Trust.Roots) > wasmsecure.MaxEvidenceBytes || len(r.Trust.State) > 1<<20 || r.Trust.RevokedSPKIs == nil || len(r.Trust.RevokedSPKIs) > 8192 {
-		return fail(errors.New("POL_002: incomplete protected host trust snapshot"))
-	}
-	seenPins := make(map[string]bool, len(r.Trust.RevokedSPKIs))
-	for _, pin := range r.Trust.RevokedSPKIs {
-		if len(pin) != 64 || strings.Trim(pin, "0123456789abcdef") != "" || seenPins[pin] {
-			return fail(errors.New("POL_002: invalid protected revocation snapshot"))
-		}
-		seenPins[pin] = true
-	}
 	p, e := wasmsecure.ParsePolicy(r.Trust.Policy)
 	if e != nil {
 		return fail(e)
@@ -158,13 +173,6 @@ func Process(data []byte) Response {
 	partial := false
 	if r.Operation == "sign" {
 		s := r.Signing
-		if s == nil || s.Append && s.Replace || len(s.Key) == 0 || len(s.Key) > wasmsecure.MaxEvidenceBytes || len(s.Certificates) > wasmsecure.MaxEvidenceBytes || len(s.CRLs) > wasmsecure.MaxEvidenceBytes {
-			return fail(errors.New("SDK_001: invalid signing inputs"))
-		}
-		profiles, err := wasmsecure.ParseAlgorithms(string(s.Manifest.Algorithm))
-		if err != nil || len(profiles) != 1 || profiles[0] != s.Manifest.Algorithm {
-			return fail(errors.New("SIG_005: exact algorithm required"))
-		}
 		core, err := wasmsecure.SigningInput(module, s.Append || s.Replace)
 		if err != nil {
 			return fail(err)
@@ -217,7 +225,7 @@ func Process(data []byte) Response {
 	if e = check(m, now); e != nil {
 		return fail(e)
 	}
-	result := Response{Status: "VERIFIED_SNAPSHOT", Manifest: &m, CheckedAt: uint64(now.Unix()), ValidUntil: m.ValidUntil()}
+	result := Response{Schema: ResponseSchema, RequestSHA256: requestDigest[:], Operation: r.Operation, Status: "VERIFIED_SNAPSHOT", Manifest: &m, CheckedAt: uint64(now.Unix()), ValidUntil: m.ValidUntil()}
 	if r.Operation == "sign" {
 		result.Module = module
 		if uint64(len(m.SignerSPKIs)) < p.Modules[m.ModuleID].RequiredSignatures() {
