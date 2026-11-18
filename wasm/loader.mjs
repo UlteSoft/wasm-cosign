@@ -59,27 +59,71 @@ export async function createWsea({cryptoBytes, frontendBytes, go, diagnostic = (
   core = await WebAssembly.instantiate(coreModule, {wasi_snapshot_preview1: wasi});
   go.importObject.wsea_crypto = core.exports;
   const frontend = await WebAssembly.instantiate(frontendBytes, go.importObject);
-  if (Object.hasOwn(globalThis, "wseaRequestJSON")) throw new Error("Use a separate worker for each WSEA instance");
+  const globals = ["wseaRequestJSON", "wseaValidateRequestJSON", "wseaValidateResponseJSON",
+    "wseaValidateExchangeJSON", "wseaValidateExchangeEnvelopeJSON"];
+  if (globals.some(name => Object.hasOwn(globalThis, name))) throw new Error("Use a separate worker for each WSEA instance");
   let fatal;
   const running = go.run(frontend.instance).catch(e => { fatal = e; });
   // Go registers synchronously before blocking in main. Never substitute a host
   // result when WASM failed to start or trapped.
   if (fatal) throw fatal;
   const request = globalThis.wseaRequestJSON;
-  if (typeof request !== "function") throw new Error("WSEA frontend did not initialize");
+  const validateRequest = globalThis.wseaValidateRequestJSON;
+  const validateResponse = globalThis.wseaValidateResponseJSON;
+  const validateExchange = globalThis.wseaValidateExchangeJSON;
+  const validateEnvelope = globalThis.wseaValidateExchangeEnvelopeJSON;
+  if (![request, validateRequest, validateResponse, validateExchange, validateEnvelope].every(fn => typeof fn === "function")) {
+    throw new Error("WSEA frontend did not initialize");
+  }
+  function available() {
+    if (fatal) throw fatal;
+    if (go.exited) throw new Error("WSEA frontend has exited");
+  }
+  function validate(fn, args) {
+    available();
+    try {
+      const result = fn(...args);
+      if (go.exited || typeof result !== "boolean") throw new Error("WSEA validator failed");
+      return result;
+    } catch (error) {
+      fatal = error instanceof Error ? error : new Error(String(error));
+      throw fatal;
+    }
+  }
   return Object.freeze({
     requestJSON(text) {
-      if (fatal) throw fatal;
-      if (go.exited) throw new Error("WSEA frontend has exited");
+      available();
       if (typeof text !== "string" || text.length > 96 * 1024 * 1024) throw new Error("Bounded JSON text required");
+      // JS counts UTF-16 code units; the WSEA limit is in UTF-8 bytes.
+      if (text.length > 32 * 1024 * 1024) {
+        const bytes = new TextEncoder().encode(text);
+        const oversized = bytes.length > 96 * 1024 * 1024;
+        bytes.fill(0);
+        if (oversized) throw new Error("Bounded JSON text required");
+      }
       try {
         const result = request(text);
         if (go.exited || typeof result !== 'string') throw new Error("WSEA frontend failed without a response");
+        if (!validate(validateExchange, [text, result])) throw new Error("WSEA frontend returned an invalid response");
         return result;
       } catch (error) {
         fatal = error instanceof Error ? error : new Error(String(error));
         throw fatal;
       }
+    },
+    validateRequestJSON(text) {
+      return typeof text === "string" && text.length <= 96 * 1024 * 1024 && validate(validateRequest, [text]);
+    },
+    validateResponseJSON(text) {
+      return typeof text === "string" && text.length <= 96 * 1024 * 1024 && validate(validateResponse, [text]);
+    },
+    validateExchangeJSON(requestText, responseText) {
+      return typeof requestText === "string" && requestText.length <= 96 * 1024 * 1024 &&
+        typeof responseText === "string" && responseText.length <= 96 * 1024 * 1024 &&
+        validate(validateExchange, [requestText, responseText]);
+    },
+    validateExchangeEnvelopeJSON(text) {
+      return typeof text === "string" && text.length <= 256 * 1024 * 1024 + 1024 && validate(validateEnvelope, [text]);
     },
     running,
   });

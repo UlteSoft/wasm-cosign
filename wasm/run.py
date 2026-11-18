@@ -208,12 +208,23 @@ def call_sdk(argv, request):
                              env={'PATH': os.defpath, 'TZ': 'UTC'}, timeout=600)
     if len(process.stdout) > 96 << 20:
         raise ValueError('SDK_001: oversized runtime response')
+    # Validate both original JSON documents in the same WSEA frontend. Python
+    # parsing or an exit status alone cannot establish a complete SDK response.
+    envelope = b'{"request":"' + base64.b64encode(raw) + b'","response":"' + base64.b64encode(process.stdout) + b'"}'
+    validation = subprocess.run(argv + ['--validate-exchange'], input=envelope, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, env={'PATH': os.defpath, 'TZ': 'UTC'}, timeout=600)
+    if validation.returncode != 0 or validation.stdout:
+        raise ValueError('SDK_001: runtime failed without a valid SDK exchange')
     try:
         response = json.loads(process.stdout)
     except (ValueError, UnicodeDecodeError):
         raise ValueError('SDK_001: runtime failed without a valid SDK response') from None
-    if process.returncode != 0 or response.get('status') == 'REJECTED':
-        raise ValueError(response.get('error', 'SDK_001: runtime failed'))
+    if response['status'] == 'REJECTED':
+        if process.returncode != 1:
+            raise ValueError('SDK_001: runtime failed after producing a rejection')
+        raise ValueError(response['error'])
+    if process.returncode != 0:
+        raise ValueError('SDK_001: runtime failed after producing a snapshot')
     if response.get('status') not in ('VERIFIED_SNAPSHOT', 'SIGNED_PARTIAL'):
         raise ValueError('SDK_001: unexpected runtime response')
     return response
@@ -310,6 +321,7 @@ def main():
         # advance it. UWVM alone supplies the separate execution authorization.
         if response['status'] == 'VERIFIED_SNAPSHOT':
             response['status'] = 'VERIFIED'
+        response['schema'] = 'wsea-file-result-1'
         print(json.dumps(response, separators=(',', ':')))
 
 
@@ -317,5 +329,5 @@ if __name__ == '__main__':
     try:
         main()
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
-        print(json.dumps({'status': 'REJECTED', 'error': str(e)}), file=sys.stderr)
+        print(json.dumps({'schema': 'wsea-file-result-1', 'status': 'REJECTED', 'error': str(e)}), file=sys.stderr)
         sys.exit(1)
